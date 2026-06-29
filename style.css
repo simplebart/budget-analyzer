@@ -1979,95 +1979,92 @@ body {
 }
 
 /* ═══════════════════════════════════════════════
-   WELCOME SCREEN
+   WELCOME SCREEN — minimal
    ═══════════════════════════════════════════════ */
 .welcome-screen {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.85);
-  backdrop-filter: blur(12px);
+  background: var(--bg);
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
 }
 
-.welcome-card {
+.welcome-minimal {
+  text-align: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.welcome-ask {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text2);
+  letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
+
+.welcome-name-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0;
   background: var(--bg2);
   border: 1px solid var(--border-strong);
-  border-radius: 24px;
-  padding: 40px 36px;
-  max-width: 400px;
-  width: 100%;
-  text-align: center;
-  box-shadow: 0 32px 80px rgba(0,0,0,0.5);
-  animation: modalIn 0.3s ease;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
 }
 
-.welcome-logo {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: center;
-}
-
-.welcome-title {
+.welcome-name-input {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 28px;
+  font-size: 20px;
+  font-weight: 500;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  width: 240px;
+  letter-spacing: -0.01em;
+}
+
+.welcome-name-input::placeholder { color: var(--text3); }
+
+.welcome-name-btn {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  padding: 16px 22px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+
+.welcome-name-btn:hover { opacity: 0.85; }
+
+/* ── Greeting overlay ── */
+.greeting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: transparent;
+}
+
+.greeting-overlay span {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(28px, 5vw, 48px);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.03em;
-  margin-bottom: 8px;
+  text-align: center;
+  padding: 0 24px;
 }
-
-.welcome-sub {
-  font-size: 14px;
-  color: var(--text2);
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-
-.welcome-features {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 28px;
-  text-align: left;
-}
-
-.welcome-feature {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--text2);
-  padding: 8px 14px;
-  background: var(--bg3);
-  border-radius: var(--radius);
-}
-
-.welcome-feature span:first-child { font-size: 18px; }
-
-.welcome-btn {
-  width: 100%;
-  padding: 14px;
-  font-size: 15px;
-  border-radius: 12px;
-  margin-bottom: 10px;
-}
-
-.welcome-demo {
-  background: none;
-  border: none;
-  color: var(--text3);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px;
-  transition: color 0.15s;
-  font-family: 'Inter', sans-serif;
-}
-
-.welcome-demo:hover { color: var(--text2); }
 
 /* ═══════════════════════════════════════════════
    MONTH COMPARISON
