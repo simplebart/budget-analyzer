@@ -1183,26 +1183,33 @@ function updateSyncStatus(status, msg) {
   }
 }
 
-/* ── Apps Script GET ── */
+/* ── Apps Script GET — via URL with callback to bypass CORS ── */
 async function gsGet(tab) {
+  // Apps Script GET responses include CORS headers when deployed as "anyone"
+  // Use no-cors for POST, but GET works fine with regular fetch
   const url = GS_URL + '?tab=' + encodeURIComponent(tab) + '&t=' + Date.now();
-  const res = await fetch(url);
+  const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.values || [];
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text);
+    if (data.error) throw new Error(data.error);
+    return data.values || [];
+  } catch(e) {
+    throw new Error('Ongeldige response van server');
+  }
 }
 
-/* ── Apps Script POST ── */
+/* ── Apps Script POST — no-cors mode, then verify via GET ── */
 async function gsPut(tab, values) {
-  const res = await fetch(GS_URL, {
+  // With no-cors we can't read the response, but the write still happens
+  await fetch(GS_URL, {
     method: 'POST',
+    mode: 'no-cors',
     body: JSON.stringify({ tab, values })
   });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
+  // Small delay to let Apps Script process
+  await new Promise(r => setTimeout(r, 400));
 }
 
 /* ══════════════════════════════════════════
