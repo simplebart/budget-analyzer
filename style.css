@@ -1560,3 +1560,72 @@ body {
 .tx-type-badge.income { background: var(--green-dim); color: var(--green); }
 .tx-type-badge.expense { background: var(--red-dim); color: var(--red); }
 .tx-type-badge.transfer { background: var(--purple-dim); color: var(--purple); }
+
+/* ═══════════════════════════════════════════════
+   SAVINGS PAGE
+   ═══════════════════════════════════════════════ */
+.savings-kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.savings-acc-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+.savings-acc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.savings-acc-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.savings-acc-note {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.savings-acc-balance {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.savings-acc-target {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+
+.savings-acc-month {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+  .savings-kpi-row { grid-template-columns: 1fr; }
+  .savings-kpi-row .card { grid-column: span 1; }
+}
