@@ -351,6 +351,53 @@
           </div>
         </div>
 
+        <div class="card settings-card" style="grid-column: 1 / -1">
+          <div class="settings-section-title">Google Sheets synchronisatie</div>
+          <div class="sync-status-bar" id="syncStatusBar">
+            <span class="sync-dot" id="syncDot"></span>
+            <span id="syncStatusText">Niet verbonden</span>
+            <span class="sync-last" id="syncLast"></span>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">API Key</div>
+              <div class="setting-desc">Jouw Google Cloud API key — wordt alleen lokaal opgeslagen</div>
+            </div>
+            <div class="inline-input-row">
+              <input type="password" class="filter-select" id="gsApiKey" placeholder="AIzaSy..." style="width:220px;font-family:monospace" />
+              <button class="btn-primary-sm" onclick="toggleShowKey()">Tonen</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Sheet ID</div>
+              <div class="setting-desc">Het lange ID uit de URL van je Google Sheet</div>
+            </div>
+            <input type="text" class="filter-select" id="gsSheetId" placeholder="1H5iZl9Cv-lIs86d..." style="width:280px;font-family:monospace" />
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Automatisch synchroniseren</div>
+              <div class="setting-desc">Sla elke wijziging direct op in Google Sheets</div>
+            </div>
+            <div class="pill-group">
+              <button class="pill" id="autoSyncOn" onclick="setAutoSync(true)">Aan</button>
+              <button class="pill active" id="autoSyncOff" onclick="setAutoSync(false)">Uit</button>
+            </div>
+          </div>
+          <div class="setting-row" style="border-bottom:none">
+            <div class="setting-info">
+              <div class="setting-name">Acties</div>
+              <div class="setting-desc">Handmatig synchroniseren of data laden vanuit Sheets</div>
+            </div>
+            <div class="inline-input-row" style="gap:6px;flex-wrap:wrap">
+              <button class="btn-secondary" onclick="saveGsConfig()">Verbinding opslaan</button>
+              <button class="btn-secondary" onclick="syncToSheets()">&#8593; Upload naar Sheets</button>
+              <button class="btn-secondary" onclick="syncFromSheets()">&#8595; Laden uit Sheets</button>
+            </div>
+          </div>
+        </div>
+
         <div class="card settings-card">
           <div class="settings-section-title">Over BudgetFlow</div>
           <div class="about-block">
