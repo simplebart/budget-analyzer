@@ -1126,7 +1126,8 @@ const SHEET_TABS = {
   savings_acc:  'Spaarrekeningen',
   savings_tx:   'SpaarmutaTies',
   categories:   'Categorieen',
-  settings:     'Instellingen'
+  settings:     'Instellingen',
+  security:     'Beveiliging'
 };
 
 let gsConfig = { autoSync: false };
@@ -1616,7 +1617,7 @@ function hashPin(pin) {
 /* ── Lees pin hash uit Sheets ── */
 async function getPinFromSheet() {
   try {
-    const rows = await gsGet(PIN_TAB);
+    const rows = await gsGet('Beveiliging');
     if (rows.length > 1 && rows[1][0]) return rows[1][0];
   } catch(e) {}
   return null;
@@ -1624,12 +1625,8 @@ async function getPinFromSheet() {
 
 /* ── Sla pin hash op in Sheets ── */
 async function savePinToSheet(hash) {
-  if (!gsConfig.apiKey && !localStorage.getItem('budgetflow_gs')) {
-    showToast('Stel eerst Google Sheets in via Instellingen.', 'warn');
-    throw new Error('Geen Sheets verbinding');
-  }
   try {
-    await gsPut(PIN_TAB, [['pin_hash'], [hash]]);
+    await gsPut('Beveiliging', [['pin_hash'], [hash]]);
   } catch(e) {
     showToast('Opslaan mislukt: ' + e.message, 'error');
     throw e;
@@ -1639,7 +1636,7 @@ async function savePinToSheet(hash) {
 /* ── Verwijder pin uit Sheets ── */
 async function deletePinFromSheet() {
   try {
-    await gsPut(PIN_TAB, [['pin_hash']]);
+    await gsPut('Beveiliging', [['pin_hash']]);
   } catch(e) {}
 }
 
