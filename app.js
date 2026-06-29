@@ -54,10 +54,12 @@ const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'
 /* ═══════════════════════════════════════════════
    PERSISTENCE
    ═══════════════════════════════════════════════ */
-function saveState() {
+function saveState(skipSync) {
   try { localStorage.setItem('budgetflow_v4', JSON.stringify(state)); } catch(e) {}
+  if (!skipSync) autoSync();
 }
 function loadState() {
+  loadGsConfig();
   try {
     const raw = localStorage.getItem('budgetflow_v4');
     if (!raw) {
@@ -1094,6 +1096,7 @@ function renderSettings(){
   document.getElementById('currencySelect').value=state.settings.currency;
   if(state.settings.monthlyIncome)document.getElementById('incomeInput').value=state.settings.monthlyIncome;
   renderCatManageList();
+  renderSyncSettings();
 }
 
 function setPeriod(p,el){
@@ -1101,6 +1104,368 @@ function setPeriod(p,el){
   document.querySelectorAll('#page-analytics .pill').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   renderAnalytics();
+}
+
+
+/* ═══════════════════════════════════════════════
+   GOOGLE SHEETS SYNC
+   ═══════════════════════════════════════════════ */
+
+// Sheet tab names
+const SHEET_TABS = {
+  transactions: 'Transacties',
+  budgets:      'Budgetten',
+  goals:        'Doelen',
+  savings_acc:  'Spaarrekeningen',
+  savings_tx:   'SpaarmutaTies',
+  categories:   'Categorieen',
+  settings:     'Instellingen'
+};
+
+let gsConfig = {
+  apiKey:   '',
+  sheetId:  '',
+  autoSync: false
+};
+
+let syncInProgress = false;
+
+/* ── Load GS config from localStorage ── */
+function loadGsConfig() {
+  try {
+    const raw = localStorage.getItem('budgetflow_gs');
+    if (raw) gsConfig = { ...gsConfig, ...JSON.parse(raw) };
+  } catch(e) {}
+}
+
+/* ── Save GS config ── */
+function saveGsConfig() {
+  const key = document.getElementById('gsApiKey').value.trim();
+  const id  = document.getElementById('gsSheetId').value.trim();
+  if (!key || !id) { showToast('Vul beide velden in.', 'error'); return; }
+  gsConfig.apiKey  = key;
+  gsConfig.sheetId = id;
+  localStorage.setItem('budgetflow_gs', JSON.stringify(gsConfig));
+  updateSyncStatus('idle');
+  showToast('Verbinding opgeslagen. Test via Upload.', 'success');
+}
+
+function toggleShowKey() {
+  const inp = document.getElementById('gsApiKey');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function setAutoSync(on) {
+  gsConfig.autoSync = on;
+  localStorage.setItem('budgetflow_gs', JSON.stringify(gsConfig));
+  document.getElementById('autoSyncOn').classList.toggle('active', on);
+  document.getElementById('autoSyncOff').classList.toggle('active', !on);
+}
+
+/* ── Status indicator ── */
+function updateSyncStatus(status, msg) {
+  const dot  = document.getElementById('syncDot');
+  const text = document.getElementById('syncStatusText');
+  const last = document.getElementById('syncLast');
+  if (!dot) return;
+  dot.className = 'sync-dot';
+  if (status === 'connected') {
+    dot.classList.add('connected');
+    text.textContent = msg || 'Verbonden';
+    last.textContent = 'Laatste sync: ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+  } else if (status === 'syncing') {
+    dot.classList.add('syncing');
+    text.textContent = msg || 'Synchroniseren...';
+  } else if (status === 'error') {
+    dot.classList.add('error');
+    text.textContent = msg || 'Fout bij synchroniseren';
+  } else {
+    text.textContent = gsConfig.apiKey ? 'Verbinding geconfigureerd' : 'Niet verbonden';
+  }
+}
+
+/* ── Toast notification ── */
+function showToast(msg, type = 'success') {
+  const colors = {
+    success: { bg: 'var(--green)',  color: '#fff' },
+    error:   { bg: 'var(--red)',    color: '#fff' },
+    info:    { bg: 'var(--accent)', color: '#fff' },
+    warn:    { bg: 'var(--amber)',  color: '#000' }
+  };
+  const c = colors[type] || colors.info;
+  const icons = { success:'✓', error:'✗', info:'ℹ', warn:'⚠' };
+  const t = document.createElement('div');
+  t.className = 'sync-toast';
+  t.style.background = c.bg;
+  t.style.color = c.color;
+  t.innerHTML = `<span>${icons[type]||'ℹ'}</span><span>${msg}</span>`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+/* ══════════════════════════════════════════
+   GOOGLE SHEETS API HELPERS
+   ══════════════════════════════════════════ */
+
+/* Build base URL */
+const gsUrl = (tab, range) =>
+  `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}/values/${encodeURIComponent(tab + (range ? '!' + range : ''))}`;
+
+/* GET values from a tab */
+async function gsGet(tab) {
+  const url = gsUrl(tab) + `?key=${gsConfig.apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.values || [];
+}
+
+/* PUT (clear + write) values to a tab */
+async function gsPut(tab, values) {
+  // First clear the sheet tab
+  const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}/values/${encodeURIComponent(tab)}:clear?key=${gsConfig.apiKey}`;
+  await fetch(clearUrl, { method: 'POST' });
+
+  if (!values.length) return;
+
+  const putUrl = gsUrl(tab, 'A1') + `?valueInputOption=RAW&key=${gsConfig.apiKey}`;
+  const res = await fetch(putUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${res.status}`);
+  }
+}
+
+/* Ensure all required tabs exist — create missing ones */
+async function gsEnsureTabs() {
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}?key=${gsConfig.apiKey}`;
+  const res = await fetch(metaUrl);
+  if (!res.ok) throw new Error('Kan spreadsheet niet ophalen. Controleer Sheet ID en API key.');
+  const meta = await res.json();
+  const existing = (meta.sheets || []).map(s => s.properties.title);
+  const needed   = Object.values(SHEET_TABS).filter(t => !existing.includes(t));
+  if (!needed.length) return;
+
+  const addUrl = `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}:batchUpdate?key=${gsConfig.apiKey}`;
+  const requests = needed.map(title => ({ addSheet: { properties: { title } } }));
+  const r = await fetch(addUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests })
+  });
+  if (!r.ok) throw new Error('Kon tabbladen niet aanmaken. Zet sheet op "Bewerker" voor iedereen met de link.');
+}
+
+/* ══════════════════════════════════════════
+   UPLOAD STATE → SHEETS
+   ══════════════════════════════════════════ */
+async function syncToSheets() {
+  if (!gsConfig.apiKey || !gsConfig.sheetId) {
+    showToast('Sla eerst je verbinding op in Instellingen.', 'warn'); return;
+  }
+  if (syncInProgress) return;
+  syncInProgress = true;
+  updateSyncStatus('syncing', 'Uploaden naar Sheets...');
+
+  try {
+    await gsEnsureTabs();
+
+    // Transactions
+    await gsPut(SHEET_TABS.transactions, [
+      ['id','type','desc','amt','date','cat','note','fromAccount','toAccount'],
+      ...state.transactions.map(t => [t.id,t.type,t.desc,t.amt,t.date,t.cat,t.note||'',t.fromAccount||'',t.toAccount||''])
+    ]);
+
+    // Budgets: one row per category
+    await gsPut(SHEET_TABS.budgets, [
+      ['category','limit'],
+      ...Object.entries(state.budgets).map(([cat, lim]) => [cat, lim])
+    ]);
+
+    // Goals
+    await gsPut(SHEET_TABS.goals, [
+      ['id','name','target','saved','date','color'],
+      ...state.goals.map(g => [g.id,g.name,g.target,g.saved,g.date,g.color])
+    ]);
+
+    // Savings accounts
+    await gsPut(SHEET_TABS.savings_acc, [
+      ['id','name','balance','target','color','note'],
+      ...state.savings.accounts.map(a => [a.id,a.name,a.balance,a.target||0,a.color,a.note||''])
+    ]);
+
+    // Savings transactions
+    await gsPut(SHEET_TABS.savings_tx, [
+      ['id','accountId','type','amt','date','desc'],
+      ...state.savings.transactions.map(t => [t.id,t.accountId,t.type,t.amt,t.date,t.desc])
+    ]);
+
+    // Categories (custom ones)
+    await gsPut(SHEET_TABS.categories, [
+      ['name','emoji','color','deletable'],
+      ...state.categories.map(c => [c.name,c.emoji,c.color,c.deletable?'1':'0'])
+    ]);
+
+    // Settings
+    await gsPut(SHEET_TABS.settings, [
+      ['key','value'],
+      ['currency',  state.settings.currency],
+      ['theme',     state.settings.theme],
+      ['monthlyIncome', state.settings.monthlyIncome]
+    ]);
+
+    updateSyncStatus('connected', 'Upload geslaagd');
+    showToast('Alles opgeslagen in Google Sheets!', 'success');
+  } catch(e) {
+    updateSyncStatus('error', 'Upload mislukt');
+    showToast('Fout: ' + e.message, 'error');
+    console.error('Sync error:', e);
+  } finally {
+    syncInProgress = false;
+  }
+}
+
+/* ══════════════════════════════════════════
+   DOWNLOAD STATE ← SHEETS
+   ══════════════════════════════════════════ */
+async function syncFromSheets() {
+  if (!gsConfig.apiKey || !gsConfig.sheetId) {
+    showToast('Sla eerst je verbinding op in Instellingen.', 'warn'); return;
+  }
+  if (syncInProgress) return;
+  syncInProgress = true;
+  updateSyncStatus('syncing', 'Laden uit Sheets...');
+
+  try {
+    // Transactions
+    const txRows = await gsGet(SHEET_TABS.transactions);
+    if (txRows.length > 1) {
+      state.transactions = txRows.slice(1).filter(r=>r[0]).map(r => ({
+        id:          Number(r[0]),
+        type:        r[1] || 'expense',
+        desc:        r[2] || '',
+        amt:         parseFloat(r[3]) || 0,
+        date:        r[4] || today(),
+        cat:         r[5] || 'Overig',
+        note:        r[6] || '',
+        fromAccount: r[7] || '',
+        toAccount:   r[8] || ''
+      }));
+    }
+
+    // Budgets
+    const budRows = await gsGet(SHEET_TABS.budgets);
+    if (budRows.length > 1) {
+      state.budgets = {};
+      budRows.slice(1).filter(r=>r[0]).forEach(r => { state.budgets[r[0]] = parseFloat(r[1]) || 0; });
+    }
+
+    // Goals
+    const goalRows = await gsGet(SHEET_TABS.goals);
+    if (goalRows.length > 1) {
+      state.goals = goalRows.slice(1).filter(r=>r[0]).map(r => ({
+        id:     Number(r[0]),
+        name:   r[1] || '',
+        target: parseFloat(r[2]) || 0,
+        saved:  parseFloat(r[3]) || 0,
+        date:   r[4] || '',
+        color:  r[5] || '#6c8aff'
+      }));
+    }
+
+    // Savings accounts
+    const savAccRows = await gsGet(SHEET_TABS.savings_acc);
+    if (savAccRows.length > 1) {
+      state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r => ({
+        id:      Number(r[0]),
+        name:    r[1] || '',
+        balance: parseFloat(r[2]) || 0,
+        target:  parseFloat(r[3]) || 0,
+        color:   r[4] || '#34d48a',
+        note:    r[5] || ''
+      }));
+    }
+
+    // Savings transactions
+    const savTxRows = await gsGet(SHEET_TABS.savings_tx);
+    if (savTxRows.length > 1) {
+      state.savings.transactions = savTxRows.slice(1).filter(r=>r[0]).map(r => ({
+        id:        Number(r[0]),
+        accountId: Number(r[1]),
+        type:      r[2] || 'deposit',
+        amt:       parseFloat(r[3]) || 0,
+        date:      r[4] || today(),
+        desc:      r[5] || ''
+      }));
+    }
+
+    // Categories
+    const catRows = await gsGet(SHEET_TABS.categories);
+    if (catRows.length > 1) {
+      state.categories = catRows.slice(1).filter(r=>r[0]).map(r => ({
+        name:      r[0],
+        emoji:     r[1] || '📦',
+        color:     r[2] || '#94a3b8',
+        deletable: r[3] === '1'
+      }));
+    }
+
+    // Settings
+    const setRows = await gsGet(SHEET_TABS.settings);
+    if (setRows.length > 1) {
+      setRows.slice(1).forEach(r => {
+        if (r[0] === 'currency')      state.settings.currency = r[1] || '€';
+        if (r[0] === 'theme')         state.settings.theme    = r[1] || 'dark';
+        if (r[0] === 'monthlyIncome') state.settings.monthlyIncome = parseFloat(r[1]) || 0;
+      });
+    }
+
+    saveState();
+    updateSyncStatus('connected', 'Geladen uit Sheets');
+    showToast('Data geladen uit Google Sheets!', 'success');
+
+    // Re-render everything
+    document.documentElement.setAttribute('data-theme', state.settings.theme);
+    populateCatSelect('txCat');
+    populateCatSelect('budgetCat');
+    updateCatFilter();
+    renderDashboard();
+    renderSettings();
+
+  } catch(e) {
+    updateSyncStatus('error', 'Laden mislukt');
+    showToast('Fout: ' + e.message, 'error');
+    console.error('Sync error:', e);
+  } finally {
+    syncInProgress = false;
+  }
+}
+
+/* ── Auto-sync hook: call after every state change ── */
+function autoSync() {
+  if (gsConfig.autoSync && gsConfig.apiKey && gsConfig.sheetId) {
+    syncToSheets();
+  }
+}
+
+/* ── Render sync status in settings ── */
+function renderSyncSettings() {
+  const keyEl  = document.getElementById('gsApiKey');
+  const idEl   = document.getElementById('gsSheetId');
+  if (keyEl)  keyEl.value  = gsConfig.apiKey  || '';
+  if (idEl)   idEl.value   = gsConfig.sheetId || '';
+  const on  = document.getElementById('autoSyncOn');
+  const off = document.getElementById('autoSyncOff');
+  if (on)  on.classList.toggle('active',  gsConfig.autoSync);
+  if (off) off.classList.toggle('active', !gsConfig.autoSync);
+  updateSyncStatus(gsConfig.apiKey ? 'idle' : 'disconnected');
 }
 
 /* ═══════════════════════════════════════════════
