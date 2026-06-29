@@ -376,6 +376,17 @@
         </div>
 
         <div class="card settings-card">
+          <div class="settings-section-title">Beveiliging</div>
+          <div class="setting-row" style="border-bottom:none">
+            <div class="setting-info">
+              <div class="setting-name">Pincode</div>
+              <div class="setting-desc">Beveilig de app met een 8-cijferige pincode — opgeslagen in Google Sheets</div>
+            </div>
+            <button class="btn-secondary" onclick="setupPin()">🔒 Pincode instellen</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
           <div class="settings-section-title">Data</div>
           <div class="setting-row">
             <div class="setting-info"><div class="setting-name">Terugkerende transacties</div><div class="setting-desc">Vaste lasten die elke maand automatisch worden toegevoegd</div></div>
@@ -854,6 +865,61 @@
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
       <button class="btn-primary" onclick="saveRecurring()">Opslaan</button>
+    </div>
+  </div>
+
+
+  <!-- PIN SCREEN -->
+  <div id="pinScreen" class="pin-screen" style="display:none">
+    <div class="pin-card">
+      <div class="pin-logo">
+        <svg width="52" height="52" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <rect width="512" height="512" rx="115" fill="#1e2a5e"/>
+          <defs>
+            <linearGradient id="pb1" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#2a3888"/><stop offset="100%" stop-color="#6c8aff"/></linearGradient>
+          </defs>
+          <text x="256" y="294" text-anchor="middle" font-family="Arial Black" font-weight="900" font-size="250" fill="white">B</text>
+          <rect x="92"  y="382" width="72"  height="38" rx="19" fill="#2a3888" opacity="0.9"/>
+          <rect x="128" y="382" width="90"  height="38" rx="19" fill="#4060cc" opacity="0.92"/>
+          <rect x="169" y="382" width="108" height="38" rx="19" fill="#6c8aff" opacity="0.95"/>
+          <rect x="215" y="382" width="126" height="38" rx="19" fill="#3db88a" opacity="0.97"/>
+          <rect x="263" y="382" width="157" height="38" rx="19" fill="#34d48a"/>
+        </svg>
+      </div>
+      <h2 class="pin-title" id="pinTitle">BudgetFlow</h2>
+      <p class="pin-sub" id="pinSub">Voer je 8-cijferige pincode in</p>
+
+      <!-- PIN dots -->
+      <div class="pin-dots" id="pinDots">
+        <span class="pin-dot" id="dot0"></span>
+        <span class="pin-dot" id="dot1"></span>
+        <span class="pin-dot" id="dot2"></span>
+        <span class="pin-dot" id="dot3"></span>
+        <span class="pin-dot" id="dot4"></span>
+        <span class="pin-dot" id="dot5"></span>
+        <span class="pin-dot" id="dot6"></span>
+        <span class="pin-dot" id="dot7"></span>
+      </div>
+
+      <!-- Numpad -->
+      <div class="pin-pad">
+        <button class="pin-key" onclick="pinKey('1')">1</button>
+        <button class="pin-key" onclick="pinKey('2')">2</button>
+        <button class="pin-key" onclick="pinKey('3')">3</button>
+        <button class="pin-key" onclick="pinKey('4')">4</button>
+        <button class="pin-key" onclick="pinKey('5')">5</button>
+        <button class="pin-key" onclick="pinKey('6')">6</button>
+        <button class="pin-key" onclick="pinKey('7')">7</button>
+        <button class="pin-key" onclick="pinKey('8')">8</button>
+        <button class="pin-key" onclick="pinKey('9')">9</button>
+        <button class="pin-key pin-key-empty"></button>
+        <button class="pin-key" onclick="pinKey('0')">0</button>
+        <button class="pin-key pin-key-del" onclick="pinDelete()">⌫</button>
+      </div>
+
+      <p class="pin-forgot" id="pinForgot" style="display:none">
+        <button onclick="pinReset()">Pincode vergeten?</button>
+      </p>
     </div>
   </div>
 
