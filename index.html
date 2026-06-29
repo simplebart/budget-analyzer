@@ -780,32 +780,20 @@
 
 
 
-  <!-- WELCOME SCREEN — shown on first visit -->
+  <!-- WELCOME SCREEN — minimal name entry on first visit -->
   <div id="welcomeScreen" class="welcome-screen" style="display:none">
-    <div class="welcome-card">
-      <div class="welcome-logo">
-        <svg width="72" height="72" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-          <rect width="512" height="512" rx="115" fill="#0a0a16"/>
-          <defs>
-            <linearGradient id="wb" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#4a6ef5"/><stop offset="100%" stop-color="#6c8aff"/></linearGradient>
-            <linearGradient id="wg" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#22c97a"/><stop offset="100%" stop-color="#34d48a"/></linearGradient>
-          </defs>
-          <path d="M256 385 C188 350 138 292 148 212 C154 164 192 122 240 113 C220 164 215 232 240 278 C251 300 255 340 256 385 Z" fill="url(#wb)"/>
-          <path d="M256 385 C324 350 374 292 364 212 C358 164 320 122 272 113 C292 164 297 232 272 278 C261 300 257 340 256 385 Z" fill="url(#wg)"/>
-          <circle cx="256" cy="117" r="14" fill="white" opacity="0.18"/>
-        </svg>
+    <div class="welcome-minimal">
+      <div class="welcome-name-prompt" id="welcomeNamePrompt">
+        <p class="welcome-ask">Hoe heet je?</p>
+        <input class="welcome-name-input" id="welcomeNameInput" type="text" placeholder="Jouw naam..." autofocus maxlength="30" />
+        <button class="welcome-name-btn" onclick="startApp()">→</button>
       </div>
-      <h1 class="welcome-title">BudgetFlow</h1>
-      <p class="welcome-sub">Jouw persoonlijke budget analyzer.<br>Grip op je geld, overal en altijd.</p>
-      <div class="welcome-features">
-        <div class="welcome-feature"><span>📊</span><span>Inzicht in al je uitgaven</span></div>
-        <div class="welcome-feature"><span>🏦</span><span>Spaarrekeningen bijhouden</span></div>
-        <div class="welcome-feature"><span>🎯</span><span>Spaardoelen instellen</span></div>
-        <div class="welcome-feature"><span>☁️</span><span>Sync via Google Sheets</span></div>
-      </div>
-      <button class="btn-primary welcome-btn" onclick="startApp()">Aan de slag →</button>
-      <button class="welcome-demo" onclick="startDemo()">Of laad demo data</button>
     </div>
+  </div>
+
+  <!-- GREETING OVERLAY — fades in then out after login -->
+  <div id="greetingOverlay" class="greeting-overlay" style="display:none">
+    <span id="greetingText"></span>
   </div>
 
   <!-- BUDGET NOTIFICATION TOAST CONTAINER -->
