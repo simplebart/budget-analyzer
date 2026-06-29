@@ -1647,21 +1647,11 @@ async function checkPinSetup() {
   // Check if Sheets is configured
   const gsRaw = localStorage.getItem('budgetflow_gs');
   const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
-  if (!gsConf || !gsConf.apiKey) {
-    // No Sheets configured — skip PIN check
-    return;
-  }
-  // Reload gsConfig from storage
-  if (gsConf) { gsConfig = { ...gsConfig, ...gsConf }; }
+  if (!gsConf || !gsConf.apiKey) return;
+  if (gsConf) gsConfig = { ...gsConfig, ...gsConf };
 
-  updateSyncStatus('syncing', 'Beveiliging controleren...');
   const stored = await getPinFromSheet();
-  updateSyncStatus('idle');
-
-  if (!stored) {
-    // No PIN set yet
-    return;
-  }
+  if (!stored) return;
 
   // Show lock screen
   pinMode = 'enter';
@@ -1671,6 +1661,19 @@ async function checkPinSetup() {
   screen.style.display = 'flex';
   document.getElementById('pinForgot').style.display = 'none';
   document.addEventListener('keydown', onPinKeydown);
+
+  // Prevent iOS from focusing any input underneath
+  document.addEventListener('focusin', preventFocusUnderPin);
+}
+
+function preventFocusUnderPin() {
+  const screen = document.getElementById('pinScreen');
+  if (screen && screen.style.display !== 'none') {
+    // Blur any focused element that's not in the pin screen
+    if (document.activeElement && !screen.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  }
 }
 
 function onPinKeydown(e) {
@@ -1715,6 +1718,7 @@ async function handlePinComplete() {
     if (hashPin(pinBuffer) === stored) {
       pinAttempts = 0;
       document.removeEventListener('keydown', onPinKeydown);
+      document.removeEventListener('focusin', preventFocusUnderPin);
       const screen = document.getElementById('pinScreen');
       screen.style.transition = 'opacity 0.3s ease';
       screen.style.opacity = '0';
