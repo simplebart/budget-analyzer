@@ -1386,8 +1386,6 @@ function checkFirstVisit() {
     const input = document.getElementById('welcomeNameInput');
     if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') startApp(); });
   } else {
-    // Returning user — show subtle greeting
-    showGreeting(state.settings.userName || '');
   }
 }
 
@@ -1402,7 +1400,6 @@ function startApp() {
   ws.style.transition = 'opacity 0.4s ease';
   setTimeout(() => {
     ws.style.display = 'none';
-    showGreeting(name);
   }, 400);
   if (gsConfig.apiKey || localStorage.getItem('budgetflow_gs')) {
     setTimeout(() => syncFromSheets(), 1200);
@@ -1416,27 +1413,7 @@ function startDemo() {
   loadDemoData();
 }
 
-function showGreeting(name) {
-  const overlay = document.getElementById('greetingOverlay');
-  const textEl  = document.getElementById('greetingText');
-  if (!overlay || !textEl) return;
-  const hour = new Date().getHours();
-  const timeWord = hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
-  textEl.textContent = name ? `${timeWord}, ${name}` : timeWord;
-  overlay.style.display = 'flex';
-  overlay.style.opacity = '0';
-  // Fade in
-  requestAnimationFrame(() => {
-    overlay.style.transition = 'opacity 0.6s ease';
-    overlay.style.opacity = '1';
-    // Hold, then fade out
-    setTimeout(() => {
-      overlay.style.transition = 'opacity 1.2s ease';
-      overlay.style.opacity = '0';
-      setTimeout(() => { overlay.style.display = 'none'; }, 1200);
-    }, 1800);
-  });
-}
+
 
 /* ═══════════════════════════════════════════════
    BUDGET NOTIFICATIONS
