@@ -1108,10 +1108,11 @@ function setPeriod(p,el){
 
 
 /* ═══════════════════════════════════════════════
-   GOOGLE SHEETS SYNC
+   GOOGLE SHEETS SYNC — via Apps Script
    ═══════════════════════════════════════════════ */
 
-// Sheet tab names
+const GS_URL = 'https://script.google.com/macros/s/AKfycbwv5eBxrbDZONavQKmwWVIvIhMQ3QpH-1k8_s7VV6l8LmOhPvcWIqwFI0hBrDaNtWAb/exec';
+
 const SHEET_TABS = {
   transactions: 'Transacties',
   budgets:      'Budgetten',
@@ -1122,15 +1123,9 @@ const SHEET_TABS = {
   settings:     'Instellingen'
 };
 
-let gsConfig = {
-  apiKey:   '',
-  sheetId:  '',
-  autoSync: false
-};
-
+let gsConfig = { autoSync: false };
 let syncInProgress = false;
 
-/* ── Load GS config from localStorage ── */
 function loadGsConfig() {
   try {
     const raw = localStorage.getItem('budgetflow_gs');
@@ -1138,28 +1133,31 @@ function loadGsConfig() {
   } catch(e) {}
 }
 
-/* ── Save GS config ── */
 function saveGsConfig() {
-  const key = document.getElementById('gsApiKey').value.trim();
-  const id  = document.getElementById('gsSheetId').value.trim();
-  if (!key || !id) { showToast('Vul beide velden in.', 'error'); return; }
-  gsConfig.apiKey  = key;
-  gsConfig.sheetId = id;
   localStorage.setItem('budgetflow_gs', JSON.stringify(gsConfig));
-  updateSyncStatus('idle');
-  showToast('Verbinding opgeslagen. Test via Upload.', 'success');
-}
-
-function toggleShowKey() {
-  const inp = document.getElementById('gsApiKey');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
 function setAutoSync(on) {
   gsConfig.autoSync = on;
-  localStorage.setItem('budgetflow_gs', JSON.stringify(gsConfig));
-  document.getElementById('autoSyncOn').classList.toggle('active', on);
-  document.getElementById('autoSyncOff').classList.toggle('active', !on);
+  saveGsConfig();
+  const onBtn  = document.getElementById('autoSyncOn');
+  const offBtn = document.getElementById('autoSyncOff');
+  if (onBtn)  onBtn.classList.toggle('active',  on);
+  if (offBtn) offBtn.classList.toggle('active', !on);
+}
+
+/* ── Toast ── */
+function showToast(msg, type) {
+  type = type || 'success';
+  const colors = { success:'var(--green)', error:'var(--red)', info:'var(--accent)', warn:'var(--amber)' };
+  const icons  = { success:'✓', error:'✗', info:'ℹ', warn:'⚠' };
+  const t = document.createElement('div');
+  t.className = 'sync-toast';
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:10px;font-family:Space Grotesk,sans-serif;font-weight:600;font-size:13px;z-index:9999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.3);color:#fff;animation:slideUp .2s ease';
+  t.style.background = colors[type] || colors.info;
+  t.innerHTML = '<span>' + (icons[type]||'ℹ') + '</span><span>' + msg + '</span>';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
 }
 
 /* ── Status indicator ── */
@@ -1171,8 +1169,8 @@ function updateSyncStatus(status, msg) {
   dot.className = 'sync-dot';
   if (status === 'connected') {
     dot.classList.add('connected');
-    text.textContent = msg || 'Verbonden';
-    last.textContent = 'Laatste sync: ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+    text.textContent = msg || 'Gesynchroniseerd';
+    if (last) last.textContent = 'Laatste sync: ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'});
   } else if (status === 'syncing') {
     dot.classList.add('syncing');
     text.textContent = msg || 'Synchroniseren...';
@@ -1180,258 +1178,159 @@ function updateSyncStatus(status, msg) {
     dot.classList.add('error');
     text.textContent = msg || 'Fout bij synchroniseren';
   } else {
-    text.textContent = gsConfig.apiKey ? 'Verbinding geconfigureerd' : 'Niet verbonden';
+    text.textContent = 'Klaar om te synchroniseren';
+    if (last) last.textContent = '';
   }
 }
 
-/* ── Toast notification ── */
-function showToast(msg, type = 'success') {
-  const colors = {
-    success: { bg: 'var(--green)',  color: '#fff' },
-    error:   { bg: 'var(--red)',    color: '#fff' },
-    info:    { bg: 'var(--accent)', color: '#fff' },
-    warn:    { bg: 'var(--amber)',  color: '#000' }
-  };
-  const c = colors[type] || colors.info;
-  const icons = { success:'✓', error:'✗', info:'ℹ', warn:'⚠' };
-  const t = document.createElement('div');
-  t.className = 'sync-toast';
-  t.style.background = c.bg;
-  t.style.color = c.color;
-  t.innerHTML = `<span>${icons[type]||'ℹ'}</span><span>${msg}</span>`;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
-}
-
-/* ══════════════════════════════════════════
-   GOOGLE SHEETS API HELPERS
-   ══════════════════════════════════════════ */
-
-/* Build base URL */
-const gsUrl = (tab, range) =>
-  `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}/values/${encodeURIComponent(tab + (range ? '!' + range : ''))}`;
-
-/* GET values from a tab */
+/* ── Apps Script GET ── */
 async function gsGet(tab) {
-  const url = gsUrl(tab) + `?key=${gsConfig.apiKey}`;
+  const url = GS_URL + '?tab=' + encodeURIComponent(tab) + '&t=' + Date.now();
   const res = await fetch(url);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${res.status}`);
-  }
+  if (!res.ok) throw new Error('HTTP ' + res.status);
   const data = await res.json();
+  if (data.error) throw new Error(data.error);
   return data.values || [];
 }
 
-/* PUT (clear + write) values to a tab */
+/* ── Apps Script POST ── */
 async function gsPut(tab, values) {
-  // First clear the sheet tab
-  const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}/values/${encodeURIComponent(tab)}:clear?key=${gsConfig.apiKey}`;
-  await fetch(clearUrl, { method: 'POST' });
-
-  if (!values.length) return;
-
-  const putUrl = gsUrl(tab, 'A1') + `?valueInputOption=RAW&key=${gsConfig.apiKey}`;
-  const res = await fetch(putUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values })
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${res.status}`);
-  }
-}
-
-/* Ensure all required tabs exist — create missing ones */
-async function gsEnsureTabs() {
-  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}?key=${gsConfig.apiKey}`;
-  const res = await fetch(metaUrl);
-  if (!res.ok) throw new Error('Kan spreadsheet niet ophalen. Controleer Sheet ID en API key.');
-  const meta = await res.json();
-  const existing = (meta.sheets || []).map(s => s.properties.title);
-  const needed   = Object.values(SHEET_TABS).filter(t => !existing.includes(t));
-  if (!needed.length) return;
-
-  const addUrl = `https://sheets.googleapis.com/v4/spreadsheets/${gsConfig.sheetId}:batchUpdate?key=${gsConfig.apiKey}`;
-  const requests = needed.map(title => ({ addSheet: { properties: { title } } }));
-  const r = await fetch(addUrl, {
+  const res = await fetch(GS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requests })
+    body: JSON.stringify({ tab, values })
   });
-  if (!r.ok) throw new Error('Kon tabbladen niet aanmaken. Zet sheet op "Bewerker" voor iedereen met de link.');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
 }
 
 /* ══════════════════════════════════════════
-   UPLOAD STATE → SHEETS
+   UPLOAD → SHEETS
    ══════════════════════════════════════════ */
 async function syncToSheets() {
-  if (!gsConfig.apiKey || !gsConfig.sheetId) {
-    showToast('Sla eerst je verbinding op in Instellingen.', 'warn'); return;
-  }
   if (syncInProgress) return;
   syncInProgress = true;
-  updateSyncStatus('syncing', 'Uploaden naar Sheets...');
+  updateSyncStatus('syncing', 'Uploaden...');
 
   try {
-    await gsEnsureTabs();
-
-    // Transactions
     await gsPut(SHEET_TABS.transactions, [
       ['id','type','desc','amt','date','cat','note','fromAccount','toAccount'],
-      ...state.transactions.map(t => [t.id,t.type,t.desc,t.amt,t.date,t.cat,t.note||'',t.fromAccount||'',t.toAccount||''])
+      ...state.transactions.map(t=>[t.id,t.type,t.desc,t.amt,t.date,t.cat,t.note||'',t.fromAccount||'',t.toAccount||''])
     ]);
 
-    // Budgets: one row per category
     await gsPut(SHEET_TABS.budgets, [
       ['category','limit'],
-      ...Object.entries(state.budgets).map(([cat, lim]) => [cat, lim])
+      ...Object.entries(state.budgets).map(([cat,lim])=>[cat,lim])
     ]);
 
-    // Goals
     await gsPut(SHEET_TABS.goals, [
       ['id','name','target','saved','date','color'],
-      ...state.goals.map(g => [g.id,g.name,g.target,g.saved,g.date,g.color])
+      ...state.goals.map(g=>[g.id,g.name,g.target,g.saved,g.date,g.color])
     ]);
 
-    // Savings accounts
     await gsPut(SHEET_TABS.savings_acc, [
       ['id','name','balance','target','color','note'],
-      ...state.savings.accounts.map(a => [a.id,a.name,a.balance,a.target||0,a.color,a.note||''])
+      ...state.savings.accounts.map(a=>[a.id,a.name,a.balance,a.target||0,a.color,a.note||''])
     ]);
 
-    // Savings transactions
     await gsPut(SHEET_TABS.savings_tx, [
       ['id','accountId','type','amt','date','desc'],
-      ...state.savings.transactions.map(t => [t.id,t.accountId,t.type,t.amt,t.date,t.desc])
+      ...state.savings.transactions.map(t=>[t.id,t.accountId,t.type,t.amt,t.date,t.desc])
     ]);
 
-    // Categories (custom ones)
     await gsPut(SHEET_TABS.categories, [
       ['name','emoji','color','deletable'],
-      ...state.categories.map(c => [c.name,c.emoji,c.color,c.deletable?'1':'0'])
+      ...state.categories.map(c=>[c.name,c.emoji,c.color,c.deletable?'1':'0'])
     ]);
 
-    // Settings
     await gsPut(SHEET_TABS.settings, [
       ['key','value'],
-      ['currency',  state.settings.currency],
-      ['theme',     state.settings.theme],
-      ['monthlyIncome', state.settings.monthlyIncome]
+      ['currency',     state.settings.currency],
+      ['theme',        state.settings.theme],
+      ['monthlyIncome',state.settings.monthlyIncome]
     ]);
 
-    updateSyncStatus('connected', 'Upload geslaagd');
+    updateSyncStatus('connected', 'Opgeslagen in Sheets');
     showToast('Alles opgeslagen in Google Sheets!', 'success');
+
   } catch(e) {
     updateSyncStatus('error', 'Upload mislukt');
     showToast('Fout: ' + e.message, 'error');
-    console.error('Sync error:', e);
+    console.error('syncToSheets:', e);
   } finally {
     syncInProgress = false;
   }
 }
 
 /* ══════════════════════════════════════════
-   DOWNLOAD STATE ← SHEETS
+   DOWNLOAD ← SHEETS
    ══════════════════════════════════════════ */
 async function syncFromSheets() {
-  if (!gsConfig.apiKey || !gsConfig.sheetId) {
-    showToast('Sla eerst je verbinding op in Instellingen.', 'warn'); return;
-  }
   if (syncInProgress) return;
   syncInProgress = true;
   updateSyncStatus('syncing', 'Laden uit Sheets...');
 
   try {
-    // Transactions
     const txRows = await gsGet(SHEET_TABS.transactions);
     if (txRows.length > 1) {
-      state.transactions = txRows.slice(1).filter(r=>r[0]).map(r => ({
-        id:          Number(r[0]),
-        type:        r[1] || 'expense',
-        desc:        r[2] || '',
-        amt:         parseFloat(r[3]) || 0,
-        date:        r[4] || today(),
-        cat:         r[5] || 'Overig',
-        note:        r[6] || '',
-        fromAccount: r[7] || '',
-        toAccount:   r[8] || ''
+      state.transactions = txRows.slice(1).filter(r=>r[0]).map(r=>({
+        id:Number(r[0]), type:r[1]||'expense', desc:r[2]||'',
+        amt:parseFloat(r[3])||0, date:r[4]||today(), cat:r[5]||'Overig',
+        note:r[6]||'', fromAccount:r[7]||'', toAccount:r[8]||''
       }));
     }
 
-    // Budgets
     const budRows = await gsGet(SHEET_TABS.budgets);
     if (budRows.length > 1) {
       state.budgets = {};
-      budRows.slice(1).filter(r=>r[0]).forEach(r => { state.budgets[r[0]] = parseFloat(r[1]) || 0; });
+      budRows.slice(1).filter(r=>r[0]).forEach(r=>{ state.budgets[r[0]]=parseFloat(r[1])||0; });
     }
 
-    // Goals
     const goalRows = await gsGet(SHEET_TABS.goals);
     if (goalRows.length > 1) {
-      state.goals = goalRows.slice(1).filter(r=>r[0]).map(r => ({
-        id:     Number(r[0]),
-        name:   r[1] || '',
-        target: parseFloat(r[2]) || 0,
-        saved:  parseFloat(r[3]) || 0,
-        date:   r[4] || '',
-        color:  r[5] || '#6c8aff'
+      state.goals = goalRows.slice(1).filter(r=>r[0]).map(r=>({
+        id:Number(r[0]), name:r[1]||'', target:parseFloat(r[2])||0,
+        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#6c8aff'
       }));
     }
 
-    // Savings accounts
     const savAccRows = await gsGet(SHEET_TABS.savings_acc);
     if (savAccRows.length > 1) {
-      state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r => ({
-        id:      Number(r[0]),
-        name:    r[1] || '',
-        balance: parseFloat(r[2]) || 0,
-        target:  parseFloat(r[3]) || 0,
-        color:   r[4] || '#34d48a',
-        note:    r[5] || ''
+      state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r=>({
+        id:Number(r[0]), name:r[1]||'', balance:parseFloat(r[2])||0,
+        target:parseFloat(r[3])||0, color:r[4]||'#34d48a', note:r[5]||''
       }));
     }
 
-    // Savings transactions
     const savTxRows = await gsGet(SHEET_TABS.savings_tx);
     if (savTxRows.length > 1) {
-      state.savings.transactions = savTxRows.slice(1).filter(r=>r[0]).map(r => ({
-        id:        Number(r[0]),
-        accountId: Number(r[1]),
-        type:      r[2] || 'deposit',
-        amt:       parseFloat(r[3]) || 0,
-        date:      r[4] || today(),
-        desc:      r[5] || ''
+      state.savings.transactions = savTxRows.slice(1).filter(r=>r[0]).map(r=>({
+        id:Number(r[0]), accountId:Number(r[1]), type:r[2]||'deposit',
+        amt:parseFloat(r[3])||0, date:r[4]||today(), desc:r[5]||''
       }));
     }
 
-    // Categories
     const catRows = await gsGet(SHEET_TABS.categories);
     if (catRows.length > 1) {
-      state.categories = catRows.slice(1).filter(r=>r[0]).map(r => ({
-        name:      r[0],
-        emoji:     r[1] || '📦',
-        color:     r[2] || '#94a3b8',
-        deletable: r[3] === '1'
+      state.categories = catRows.slice(1).filter(r=>r[0]).map(r=>({
+        name:r[0], emoji:r[1]||'📦', color:r[2]||'#94a3b8', deletable:r[3]==='1'
       }));
     }
 
-    // Settings
     const setRows = await gsGet(SHEET_TABS.settings);
     if (setRows.length > 1) {
-      setRows.slice(1).forEach(r => {
-        if (r[0] === 'currency')      state.settings.currency = r[1] || '€';
-        if (r[0] === 'theme')         state.settings.theme    = r[1] || 'dark';
-        if (r[0] === 'monthlyIncome') state.settings.monthlyIncome = parseFloat(r[1]) || 0;
+      setRows.slice(1).forEach(r=>{
+        if (r[0]==='currency')      state.settings.currency      = r[1]||'€';
+        if (r[0]==='theme')         state.settings.theme         = r[1]||'dark';
+        if (r[0]==='monthlyIncome') state.settings.monthlyIncome = parseFloat(r[1])||0;
       });
     }
 
-    saveState();
+    saveState(true); // skip autoSync to avoid loop
     updateSyncStatus('connected', 'Geladen uit Sheets');
     showToast('Data geladen uit Google Sheets!', 'success');
 
-    // Re-render everything
     document.documentElement.setAttribute('data-theme', state.settings.theme);
     populateCatSelect('txCat');
     populateCatSelect('budgetCat');
@@ -1442,30 +1341,24 @@ async function syncFromSheets() {
   } catch(e) {
     updateSyncStatus('error', 'Laden mislukt');
     showToast('Fout: ' + e.message, 'error');
-    console.error('Sync error:', e);
+    console.error('syncFromSheets:', e);
   } finally {
     syncInProgress = false;
   }
 }
 
-/* ── Auto-sync hook: call after every state change ── */
+/* ── Auto-sync after every save ── */
 function autoSync() {
-  if (gsConfig.autoSync && gsConfig.apiKey && gsConfig.sheetId) {
-    syncToSheets();
-  }
+  if (gsConfig.autoSync) syncToSheets();
 }
 
-/* ── Render sync status in settings ── */
+/* ── Render sync panel in settings ── */
 function renderSyncSettings() {
-  const keyEl  = document.getElementById('gsApiKey');
-  const idEl   = document.getElementById('gsSheetId');
-  if (keyEl)  keyEl.value  = gsConfig.apiKey  || '';
-  if (idEl)   idEl.value   = gsConfig.sheetId || '';
-  const on  = document.getElementById('autoSyncOn');
-  const off = document.getElementById('autoSyncOff');
-  if (on)  on.classList.toggle('active',  gsConfig.autoSync);
-  if (off) off.classList.toggle('active', !gsConfig.autoSync);
-  updateSyncStatus(gsConfig.apiKey ? 'idle' : 'disconnected');
+  const onBtn  = document.getElementById('autoSyncOn');
+  const offBtn = document.getElementById('autoSyncOff');
+  if (onBtn)  onBtn.classList.toggle('active',  gsConfig.autoSync);
+  if (offBtn) offBtn.classList.toggle('active', !gsConfig.autoSync);
+  updateSyncStatus('idle');
 }
 
 /* ═══════════════════════════════════════════════
