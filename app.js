@@ -1793,13 +1793,6 @@ async function pinReset() {
 }
 
 async function setupPin() {
-  // Check if Sheets is configured
-  const gsRaw = localStorage.getItem('budgetflow_gs');
-  const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
-  if (!gsConf || !gsConf.apiKey) {
-    showToast('Stel eerst Google Sheets in via Instellingen → Synchronisatie.', 'warn');
-    return;
-  }
   const screen = document.getElementById('pinScreen');
   if (!screen) return;
   pinMode = 'setup';
