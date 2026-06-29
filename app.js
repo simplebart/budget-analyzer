@@ -93,9 +93,9 @@ const PAGE_TITLES = {
 function navigate(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.bottom-nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
-  const navBtn = document.querySelector(`[data-page="${page}"]`);
-  if (navBtn) navBtn.classList.add('active');
+  document.querySelectorAll(`[data-page="${page}"]`).forEach(el=>el.classList.add('active'));
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page]||page;
   if (window.innerWidth <= 900) closeSidebar();
   if (page==='dashboard')    renderDashboard();
