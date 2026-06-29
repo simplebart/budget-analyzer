@@ -1644,3 +1644,64 @@ body {
   .savings-kpi-row { grid-template-columns: 1fr; }
   .savings-kpi-row .card { grid-column: span 1; }
 }
+
+/* ═══════════════════════════════════════════════
+   GOOGLE SHEETS SYNC
+   ═══════════════════════════════════════════════ */
+.sync-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+
+.sync-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.sync-dot.syncing      { background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: pulse 1s infinite; }
+.sync-dot.error        { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.sync-last {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text3);
+}
+
+.sync-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
