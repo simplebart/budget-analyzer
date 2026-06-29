@@ -899,7 +899,8 @@ function computeMetrics() {
    ═══════════════════════════════════════════════ */
 function renderDashboard(){
   const now=new Date();
-  document.getElementById('dashSub').textContent=monthName(now);
+  const userName = state.settings.userName||'';
+  document.getElementById('dashSub').textContent = (userName ? userName + ' · ' : '') + monthName(now);
   document.getElementById('sidebarMonth').textContent=monthName(now);
   const{income,expense,transfer,balance,cats,burnDaily,projected,score,breakdown}=computeMetrics();
   const transCount=getCurrentMonthTx().filter(t=>t.type==='transfer').length;
@@ -1375,28 +1376,66 @@ function renderSyncSettings() {
 
 
 /* ═══════════════════════════════════════════════
-   WELCOME SCREEN
+   WELCOME SCREEN — minimal
    ═══════════════════════════════════════════════ */
 function checkFirstVisit() {
   if (state.firstVisit) {
-    document.getElementById('welcomeScreen').style.display = 'flex';
+    const ws = document.getElementById('welcomeScreen');
+    ws.style.display = 'flex';
+    // Allow Enter key to submit
+    const input = document.getElementById('welcomeNameInput');
+    if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') startApp(); });
+  } else {
+    // Returning user — show subtle greeting
+    showGreeting(state.settings.userName || '');
   }
 }
 
 function startApp() {
+  const nameEl = document.getElementById('welcomeNameInput');
+  const name = nameEl ? nameEl.value.trim() : '';
+  if (name) state.settings.userName = name;
   state.firstVisit = false;
   saveState(true);
-  document.getElementById('welcomeScreen').style.display = 'none';
-  // Auto-sync from Sheets if configured
+  const ws = document.getElementById('welcomeScreen');
+  ws.style.opacity = '0';
+  ws.style.transition = 'opacity 0.4s ease';
+  setTimeout(() => {
+    ws.style.display = 'none';
+    showGreeting(name);
+  }, 400);
   if (gsConfig.apiKey || localStorage.getItem('budgetflow_gs')) {
-    setTimeout(() => syncFromSheets(), 800);
+    setTimeout(() => syncFromSheets(), 1200);
   }
 }
 
 function startDemo() {
   state.firstVisit = false;
-  document.getElementById('welcomeScreen').style.display = 'none';
+  const ws = document.getElementById('welcomeScreen');
+  ws.style.display = 'none';
   loadDemoData();
+}
+
+function showGreeting(name) {
+  const overlay = document.getElementById('greetingOverlay');
+  const textEl  = document.getElementById('greetingText');
+  if (!overlay || !textEl) return;
+  const hour = new Date().getHours();
+  const timeWord = hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
+  textEl.textContent = name ? `${timeWord}, ${name}` : timeWord;
+  overlay.style.display = 'flex';
+  overlay.style.opacity = '0';
+  // Fade in
+  requestAnimationFrame(() => {
+    overlay.style.transition = 'opacity 0.6s ease';
+    overlay.style.opacity = '1';
+    // Hold, then fade out
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 1.2s ease';
+      overlay.style.opacity = '0';
+      setTimeout(() => { overlay.style.display = 'none'; }, 1200);
+    }, 1800);
+  });
 }
 
 /* ═══════════════════════════════════════════════
