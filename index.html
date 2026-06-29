@@ -22,7 +22,16 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-      <span class="logo-icon">◈</span>
+      <svg width="28" height="28" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <rect width="512" height="512" rx="115" fill="#0a0a16"/>
+        <defs>
+          <linearGradient id="sb" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#4a6ef5"/><stop offset="100%" stop-color="#6c8aff"/></linearGradient>
+          <linearGradient id="sg" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#22c97a"/><stop offset="100%" stop-color="#34d48a"/></linearGradient>
+        </defs>
+        <path d="M256 385 C188 350 138 292 148 212 C154 164 192 122 240 113 C220 164 215 232 240 278 C251 300 255 340 256 385 Z" fill="url(#sb)"/>
+        <path d="M256 385 C324 350 374 292 364 212 C358 164 320 122 272 113 C292 164 297 232 272 278 C261 300 257 340 256 385 Z" fill="url(#sg)"/>
+        <circle cx="256" cy="117" r="14" fill="white" opacity="0.18"/>
+      </svg>
       <span class="logo-text">BudgetFlow</span>
     </div>
     <nav class="sidebar-nav">
@@ -45,6 +54,10 @@
       <button class="nav-item" data-page="goals" onclick="navigate('goals')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         Doelen
+      </button>
+      <button class="nav-item" data-page="recurring" onclick="navigate('recurring')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        Terugkerend
       </button>
       <button class="nav-item" data-page="savings" onclick="navigate('savings')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
@@ -171,6 +184,12 @@
             <div class="proj-values"><span id="projCurrent">€0</span><span id="projEnd">€0</span></div>
           </div>
         </div>
+      </div>
+
+      <!-- MONTH COMPARISON -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-header"><span class="card-title">Vergelijking vorige maand</span></div>
+        <div id="monthCompare"><div class="empty-state" style="padding:12px">Nog niet genoeg data</div></div>
       </div>
     </section>
 
@@ -359,6 +378,10 @@
         <div class="card settings-card">
           <div class="settings-section-title">Data</div>
           <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Terugkerende transacties</div><div class="setting-desc">Vaste lasten die elke maand automatisch worden toegevoegd</div></div>
+            <button class="btn-secondary" onclick="navigate('recurring')">Beheren</button>
+          </div>
+          <div class="setting-row">
             <div class="setting-info"><div class="setting-name">CSV importeren</div><div class="setting-desc">Importeer transacties vanuit je bank</div></div>
             <button class="btn-secondary" onclick="openModal('importCSV')">↑ Importeren</button>
           </div>
@@ -465,6 +488,28 @@
         <div id="savingsTxList"><div class="empty-state">Nog geen mutaties</div></div>
       </div>
     </section>
+
+    <!-- ══════════════ TERUGKERENDE TRANSACTIES ══════════════ -->
+    <section class="page" id="page-recurring">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Terugkerende transacties</h1>
+          <p class="page-sub">Vaste lasten die elke maand automatisch worden toegevoegd</p>
+        </div>
+        <button class="btn-primary" onclick="openModal('addRecurring')">+ Toevoegen</button>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">
+          <span class="card-title">Deze maand</span>
+          <span class="kpi-sub" id="recurringMonthStatus"></span>
+        </div>
+        <div id="recurringApplyRow" style="display:none;padding:0 0 14px">
+          <button class="btn-primary" onclick="applyRecurring()">✓ Voeg terugkerende transacties toe voor deze maand</button>
+        </div>
+        <div id="recurringList"><div class="empty-state">Nog geen terugkerende transacties</div></div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ══════════════ MODALS ══════════════ -->
@@ -734,6 +779,38 @@
   </div>
 
 
+
+  <!-- WELCOME SCREEN — shown on first visit -->
+  <div id="welcomeScreen" class="welcome-screen" style="display:none">
+    <div class="welcome-card">
+      <div class="welcome-logo">
+        <svg width="72" height="72" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <rect width="512" height="512" rx="115" fill="#0a0a16"/>
+          <defs>
+            <linearGradient id="wb" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#4a6ef5"/><stop offset="100%" stop-color="#6c8aff"/></linearGradient>
+            <linearGradient id="wg" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#22c97a"/><stop offset="100%" stop-color="#34d48a"/></linearGradient>
+          </defs>
+          <path d="M256 385 C188 350 138 292 148 212 C154 164 192 122 240 113 C220 164 215 232 240 278 C251 300 255 340 256 385 Z" fill="url(#wb)"/>
+          <path d="M256 385 C324 350 374 292 364 212 C358 164 320 122 272 113 C292 164 297 232 272 278 C261 300 257 340 256 385 Z" fill="url(#wg)"/>
+          <circle cx="256" cy="117" r="14" fill="white" opacity="0.18"/>
+        </svg>
+      </div>
+      <h1 class="welcome-title">BudgetFlow</h1>
+      <p class="welcome-sub">Jouw persoonlijke budget analyzer.<br>Grip op je geld, overal en altijd.</p>
+      <div class="welcome-features">
+        <div class="welcome-feature"><span>📊</span><span>Inzicht in al je uitgaven</span></div>
+        <div class="welcome-feature"><span>🏦</span><span>Spaarrekeningen bijhouden</span></div>
+        <div class="welcome-feature"><span>🎯</span><span>Spaardoelen instellen</span></div>
+        <div class="welcome-feature"><span>☁️</span><span>Sync via Google Sheets</span></div>
+      </div>
+      <button class="btn-primary welcome-btn" onclick="startApp()">Aan de slag →</button>
+      <button class="welcome-demo" onclick="startDemo()">Of laad demo data</button>
+    </div>
+  </div>
+
+  <!-- BUDGET NOTIFICATION TOAST CONTAINER -->
+  <div id="notifContainer"></div>
+
   <!-- MOBILE BOTTOM NAV — only visible on ≤600px -->
   <nav class="bottom-nav" id="bottomNav">
     <button class="bottom-nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
@@ -754,6 +831,46 @@
       <span>Meer</span>
     </button>
   </nav>
+
+
+  <!-- ADD RECURRING TRANSACTION -->
+  <div class="modal" id="modal-addRecurring">
+    <div class="modal-header">
+      <h2 class="modal-title">Terugkerende transactie</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="type-toggle">
+        <button class="type-btn active" id="recTypeBtnIncome" onclick="setRecType('income')">↑ Inkomst</button>
+        <button class="type-btn" id="recTypeBtnExpense" onclick="setRecType('expense')">↓ Uitgave</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Omschrijving</label>
+        <input class="form-input" type="text" id="recDesc" placeholder="bijv. Huur, Salaris, Netflix..." />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Bedrag</label>
+          <div class="amount-input-wrap">
+            <span class="currency-symbol">€</span>
+            <input class="form-input amount-input" type="number" id="recAmt" placeholder="0,00" min="0" step="0.01" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dag van de maand</label>
+          <input class="form-input" type="number" id="recDay" placeholder="1" min="1" max="28" value="1" />
+        </div>
+      </div>
+      <div class="form-group" id="recCatWrap">
+        <label class="form-label">Categorie</label>
+        <select class="form-input" id="recCat"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
+      <button class="btn-primary" onclick="saveRecurring()">Opslaan</button>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
