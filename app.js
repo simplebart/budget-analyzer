@@ -423,7 +423,7 @@ function renderSavings() {
         }
         <div class="savings-acc-month">
           <span>Deze maand:</span>
-          <span style="color:${monthNet>=0?'var(--green)':'var(--red)';font-weight:600}">${monthNet>=0?'+':''}${fmt(monthNet)}</span>
+          <span style="color:${monthNet>=0?'var(--green)':'var(--red)'};font-weight:600">${monthNet>=0?'+':''}${fmt(monthNet)}</span>
         </div>
       </div>`;
     }).join('');
