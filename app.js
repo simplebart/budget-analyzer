@@ -1624,10 +1624,15 @@ async function getPinFromSheet() {
 
 /* ── Sla pin hash op in Sheets ── */
 async function savePinToSheet(hash) {
+  if (!gsConfig.apiKey && !localStorage.getItem('budgetflow_gs')) {
+    showToast('Stel eerst Google Sheets in via Instellingen.', 'warn');
+    throw new Error('Geen Sheets verbinding');
+  }
   try {
     await gsPut(PIN_TAB, [['pin_hash'], [hash]]);
   } catch(e) {
-    console.error('PIN opslaan mislukt:', e);
+    showToast('Opslaan mislukt: ' + e.message, 'error');
+    throw e;
   }
 }
 
@@ -1643,10 +1648,14 @@ async function checkPinSetup() {
   if (!screen) return;
 
   // Check if Sheets is configured
-  if (!gsConfig.apiKey && !localStorage.getItem('budgetflow_gs')) {
-    // No Sheets configured — skip PIN
+  const gsRaw = localStorage.getItem('budgetflow_gs');
+  const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
+  if (!gsConf || !gsConf.apiKey) {
+    // No Sheets configured — skip PIN check
     return;
   }
+  // Reload gsConfig from storage
+  if (gsConf) { gsConfig = { ...gsConfig, ...gsConf }; }
 
   updateSyncStatus('syncing', 'Beveiliging controleren...');
   const stored = await getPinFromSheet();
@@ -1735,15 +1744,21 @@ async function handlePinComplete() {
     updatePinUI();
   } else if (pinMode === 'confirm') {
     if (pinBuffer === pinTemp) {
-      document.getElementById('pinSub').textContent = 'Opslaan...';
-      await savePinToSheet(hashPin(pinBuffer));
-      pinBuffer = ''; pinTemp = '';
-      const screen = document.getElementById('pinScreen');
-      screen.style.transition = 'opacity 0.3s ease';
-      screen.style.opacity = '0';
-      setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
-      showToast('Pincode opgeslagen in Google Sheets!', 'success');
-      document.removeEventListener('keydown', onPinKeydown);
+      document.getElementById('pinSub').textContent = 'Opslaan in Sheets...';
+      try {
+        await savePinToSheet(hashPin(pinBuffer));
+        pinBuffer = ''; pinTemp = '';
+        const screen = document.getElementById('pinScreen');
+        screen.style.transition = 'opacity 0.3s ease';
+        screen.style.opacity = '0';
+        setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
+        showToast('Pincode opgeslagen in Google Sheets!', 'success');
+        document.removeEventListener('keydown', onPinKeydown);
+      } catch(e) {
+        pinBuffer = ''; pinTemp = '';
+        pinMode = 'setup';
+        updatePinUI();
+      }
     } else {
       pinBuffer = ''; pinTemp = '';
       pinMode = 'setup';
@@ -1781,7 +1796,15 @@ async function pinReset() {
 }
 
 async function setupPin() {
+  // Check if Sheets is configured
+  const gsRaw = localStorage.getItem('budgetflow_gs');
+  const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
+  if (!gsConf || !gsConf.apiKey) {
+    showToast('Stel eerst Google Sheets in via Instellingen → Synchronisatie.', 'warn');
+    return;
+  }
   const screen = document.getElementById('pinScreen');
+  if (!screen) return;
   pinMode = 'setup';
   pinBuffer = ''; pinTemp = '';
   updatePinUI();
