@@ -24,6 +24,9 @@ let state = {
     { name:'Overig',         emoji:'📦', color:'#94a3b8', deletable:false },
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0 },
+  recurring: [],        // [{ id, type, desc, amt, day, cat }]
+  lastRecurringMonth: '',  // 'YYYY-MM' of last applied month
+  firstVisit: true,
   filters: { type:'all', cat:'all', sort:'date-desc', search:'' },
   analyticsPeriod: 'month',
   selectedGoalColor: '#6c8aff'
@@ -105,6 +108,7 @@ function navigate(page) {
   if (page==='goals')        renderGoals();
   if (page==='savings')      renderSavings();
   if (page==='settings')     renderSettings();
+  if (page==='recurring')    renderRecurring();
 }
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
@@ -946,6 +950,7 @@ function renderDashboard(){
   document.getElementById('projCurrent').textContent=fmt(expense);
   document.getElementById('projEnd').textContent=fmt(projected);
   document.getElementById('txPageSub').textContent=state.transactions.length+' transacties in totaal';
+  renderMonthComparison();
 }
 
 /* ═══════════════════════════════════════════════
@@ -1368,11 +1373,216 @@ function renderSyncSettings() {
   updateSyncStatus('idle');
 }
 
+
+/* ═══════════════════════════════════════════════
+   WELCOME SCREEN
+   ═══════════════════════════════════════════════ */
+function checkFirstVisit() {
+  if (state.firstVisit) {
+    document.getElementById('welcomeScreen').style.display = 'flex';
+  }
+}
+
+function startApp() {
+  state.firstVisit = false;
+  saveState(true);
+  document.getElementById('welcomeScreen').style.display = 'none';
+  // Auto-sync from Sheets if configured
+  if (gsConfig.apiKey || localStorage.getItem('budgetflow_gs')) {
+    setTimeout(() => syncFromSheets(), 800);
+  }
+}
+
+function startDemo() {
+  state.firstVisit = false;
+  document.getElementById('welcomeScreen').style.display = 'none';
+  loadDemoData();
+}
+
+/* ═══════════════════════════════════════════════
+   BUDGET NOTIFICATIONS
+   ═══════════════════════════════════════════════ */
+function checkBudgetNotifications() {
+  if (!Object.keys(state.budgets).length) return;
+  const tx = getCurrentMonthTx();
+  const alerts = [];
+
+  Object.entries(state.budgets).forEach(([cat, limit]) => {
+    const spent = tx.filter(t=>t.type==='expense'&&t.cat===cat).reduce((a,t)=>a+t.amt,0);
+    const pct = Math.round((spent/limit)*100);
+    if (pct >= 100) alerts.push({ cat, pct, type:'over',  msg:`${cat}: budget overschreden (${pct}%)` });
+    else if (pct >= 80) alerts.push({ cat, pct, type:'warn', msg:`${cat}: ${pct}% van budget opgebruikt` });
+  });
+
+  const container = document.getElementById('notifContainer');
+  if (!container || !alerts.length) return;
+
+  // Only show once per session
+  const shownKey = 'budgetflow_notif_' + today();
+  if (sessionStorage.getItem(shownKey)) return;
+  sessionStorage.setItem(shownKey, '1');
+
+  alerts.slice(0,3).forEach((a, i) => {
+    setTimeout(() => {
+      const n = document.createElement('div');
+      n.className = 'budget-notif';
+      n.style.cssText = `position:fixed;top:${20+i*70}px;right:20px;z-index:8000;background:var(--bg2);border:1px solid ${a.type==='over'?'var(--red)':'var(--amber)'};border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,0.3);font-size:13px;max-width:280px;animation:slideUp .3s ease`;
+      n.innerHTML = `<span style="font-size:18px">${a.type==='over'?'🚨':'⚠️'}</span><span style="color:var(--text);flex:1">${a.msg}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">×</button>`;
+      document.body.appendChild(n);
+      setTimeout(() => n.remove(), 6000);
+    }, i * 400);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   RECURRING TRANSACTIONS
+   ═══════════════════════════════════════════════ */
+let currentRecType = 'expense';
+
+function setRecType(type) {
+  currentRecType = type;
+  ['income','expense'].forEach(t => {
+    const btn = document.getElementById('recTypeBtn'+t.charAt(0).toUpperCase()+t.slice(1));
+    if (btn) btn.classList.toggle('active', t===type);
+  });
+  const catWrap = document.getElementById('recCatWrap');
+  if (catWrap) catWrap.style.display = type==='expense' ? '' : 'none';
+}
+
+function saveRecurring() {
+  const desc = document.getElementById('recDesc').value.trim();
+  const amt  = parseFloat(document.getElementById('recAmt').value);
+  const day  = parseInt(document.getElementById('recDay').value)||1;
+  const cat  = currentRecType==='expense' ? document.getElementById('recCat').value : 'Inkomst';
+  if (!desc||isNaN(amt)||amt<=0) return;
+  if (!state.recurring) state.recurring = [];
+  state.recurring.push({ id:Date.now(), type:currentRecType, desc, amt, day:Math.min(28,Math.max(1,day)), cat });
+  saveState();
+  closeModal();
+  renderRecurring();
+}
+
+function deleteRecurring(id) {
+  state.recurring = (state.recurring||[]).filter(r=>r.id!==id);
+  saveState();
+  renderRecurring();
+}
+
+function applyRecurring() {
+  const now = new Date();
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  let added = 0;
+  (state.recurring||[]).forEach(r => {
+    const day = String(Math.min(r.day, getDaysInMonth())).padStart(2,'0');
+    const date = `${monthPrefix}-${day}`;
+    // Check not already added this month
+    const alreadyExists = state.transactions.some(t=>t.desc===r.desc&&t.date.startsWith(monthPrefix)&&t.amt===r.amt&&t.type===r.type);
+    if (!alreadyExists) {
+      state.transactions.push({ id:Date.now()+Math.random(), type:r.type, desc:r.desc, amt:r.amt, date, cat:r.cat, note:'Terugkerend', fromAccount:'', toAccount:'' });
+      added++;
+    }
+  });
+  state.lastRecurringMonth = monthPrefix;
+  saveState();
+  renderRecurring();
+  renderDashboard();
+  if (added>0) showToast(`${added} terugkerende transacties toegevoegd!`, 'success');
+  else showToast('Alles was al toegevoegd deze maand.', 'info');
+}
+
+function renderRecurring() {
+  const list = document.getElementById('recurringList');
+  const applyRow = document.getElementById('recurringApplyRow');
+  const statusEl = document.getElementById('recurringMonthStatus');
+  if (!list) return;
+
+  const recurring = state.recurring||[];
+  const now = new Date();
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const alreadyApplied = state.lastRecurringMonth === monthPrefix;
+
+  if (statusEl) statusEl.textContent = alreadyApplied ? '✓ Toegevoegd deze maand' : 'Nog niet toegevoegd';
+  if (applyRow) applyRow.style.display = (!alreadyApplied && recurring.length) ? '' : 'none';
+
+  if (!recurring.length) {
+    list.innerHTML = '<div class="empty-state">Nog geen terugkerende transacties<br><span style="font-size:12px;color:var(--text3)">Voeg vaste lasten toe zoals huur, abonnementen of salaris</span></div>';
+    return;
+  }
+
+  const totalIn  = recurring.filter(r=>r.type==='income').reduce((a,r)=>a+r.amt,0);
+  const totalOut = recurring.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amt,0);
+
+  list.innerHTML = `
+    <div style="display:flex;gap:16px;padding:0 0 14px;border-bottom:1px solid var(--border);margin-bottom:12px;font-size:13px">
+      <span style="color:var(--text2)">Maandelijks in: <strong style="color:var(--green);font-family:'Space Grotesk',sans-serif">${fmt(totalIn)}</strong></span>
+      <span style="color:var(--text2)">Maandelijks uit: <strong style="color:var(--red);font-family:'Space Grotesk',sans-serif">${fmt(totalOut)}</strong></span>
+    </div>
+    <table class="tx-table">
+      <thead><tr><th>Omschrijving</th><th>Categorie</th><th>Dag</th><th class="right">Bedrag</th><th></th></tr></thead>
+      <tbody>${recurring.map(r=>{
+        const col = r.type==='income'?'var(--green)':catColor(r.cat);
+        const sign = r.type==='income'?'+':'−';
+        const amtCol = r.type==='income'?'var(--green)':'var(--red)';
+        return `<tr>
+          <td><div style="font-weight:500">${r.desc}</div><div style="font-size:11px;color:var(--text3)">Elke maand dag ${r.day}</div></td>
+          <td><span class="tx-cat-badge"><span class="tx-cat-dot" style="background:${col}"></span>${r.cat}</span></td>
+          <td style="color:var(--text2)">${r.day}</td>
+          <td class="tx-amount-cell"><span class="tx-amount ${r.type==='income'?'income':'expense'}">${sign}${fmt(r.amt)}</span></td>
+          <td><button class="tx-del-btn" onclick="deleteRecurring(${r.id})">×</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+/* ═══════════════════════════════════════════════
+   MONTH COMPARISON (dashboard addition)
+   ═══════════════════════════════════════════════ */
+function getMonthTx(monthPrefix) {
+  return state.transactions.filter(t=>t.date.startsWith(monthPrefix));
+}
+
+function renderMonthComparison() {
+  const el = document.getElementById('monthCompare');
+  if (!el) return;
+  const now = new Date();
+  const thisPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const prev = new Date(now); prev.setMonth(prev.getMonth()-1);
+  const prevPrefix = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+
+  const thisExp  = getMonthTx(thisPrefix).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+  const prevExp  = getMonthTx(prevPrefix).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+  const thisInc  = getMonthTx(thisPrefix).filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+  const prevInc  = getMonthTx(prevPrefix).filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+
+  const expDiff = thisExp - prevExp;
+  const incDiff = thisInc - prevInc;
+  const prevName = prev.toLocaleDateString('nl-NL',{month:'long'});
+  const thisName = now.toLocaleDateString('nl-NL',{month:'long'});
+
+  el.innerHTML = `
+    <div class="compare-row">
+      <span class="compare-label">Uitgaven</span>
+      <span class="compare-prev">${fmt(prevExp)}<span class="compare-month">${prevName}</span></span>
+      <span class="compare-arrow ${expDiff>0?'worse':'better'}">${expDiff>0?'↑':'↓'}</span>
+      <span class="compare-now">${fmt(thisExp)}<span class="compare-month">${thisName}</span></span>
+      <span class="compare-delta" style="color:${expDiff>0?'var(--red)':'var(--green)'}">${expDiff>0?'+':''}${fmt(expDiff)}</span>
+    </div>
+    <div class="compare-row">
+      <span class="compare-label">Inkomsten</span>
+      <span class="compare-prev">${fmt(prevInc)}<span class="compare-month">${prevName}</span></span>
+      <span class="compare-arrow ${incDiff>=0?'better':'worse'}">${incDiff>=0?'↑':'↓'}</span>
+      <span class="compare-now">${fmt(thisInc)}<span class="compare-month">${thisName}</span></span>
+      <span class="compare-delta" style="color:${incDiff>=0?'var(--green)':'var(--red)'}">${incDiff>=0?'+':''}${fmt(incDiff)}</span>
+    </div>`;
+}
+
+
 /* ═══════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════ */
 function init(){
   loadState();
+  if(!state.recurring) state.recurring=[];
   document.documentElement.setAttribute('data-theme',state.settings.theme);
   document.querySelectorAll('.currency-symbol').forEach(el=>el.textContent=state.settings.currency);
   const txDateEl=document.getElementById('txDate');
@@ -1380,8 +1590,15 @@ function init(){
   document.getElementById('sidebarMonth').textContent=monthName(new Date());
   populateCatSelect('txCat');
   populateCatSelect('budgetCat');
+  populateCatSelect('recCat');
   updateCatFilter();
   renderDashboard();
+  checkFirstVisit();
+  setTimeout(()=>checkBudgetNotifications(), 1500);
+  // Auto-load from Sheets on startup if configured and not first visit
+  if(!state.firstVisit && gsConfig.apiKey) {
+    setTimeout(()=>syncFromSheets(), 1000);
+  }
 }
 
 document.addEventListener('DOMContentLoaded',init);
