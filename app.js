@@ -1593,6 +1593,203 @@ function renderMonthComparison() {
 }
 
 
+
+/* ═══════════════════════════════════════════════
+   PIN / BEVEILIGING — opgeslagen in Google Sheets
+   ═══════════════════════════════════════════════ */
+
+let pinBuffer   = '';
+let pinMode     = 'enter'; // 'enter' | 'setup' | 'confirm'
+let pinTemp     = '';
+let pinAttempts = 0;
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_TAB = 'Beveiliging';
+
+function hashPin(pin) {
+  let h = 0;
+  for (let i = 0; i < pin.length; i++) {
+    h = Math.imul(31, h) + pin.charCodeAt(i) | 0;
+  }
+  return h.toString(36);
+}
+
+/* ── Lees pin hash uit Sheets ── */
+async function getPinFromSheet() {
+  try {
+    const rows = await gsGet(PIN_TAB);
+    if (rows.length > 1 && rows[1][0]) return rows[1][0];
+  } catch(e) {}
+  return null;
+}
+
+/* ── Sla pin hash op in Sheets ── */
+async function savePinToSheet(hash) {
+  try {
+    await gsPut(PIN_TAB, [['pin_hash'], [hash]]);
+  } catch(e) {
+    console.error('PIN opslaan mislukt:', e);
+  }
+}
+
+/* ── Verwijder pin uit Sheets ── */
+async function deletePinFromSheet() {
+  try {
+    await gsPut(PIN_TAB, [['pin_hash']]);
+  } catch(e) {}
+}
+
+async function checkPinSetup() {
+  const screen = document.getElementById('pinScreen');
+  if (!screen) return;
+
+  // Check if Sheets is configured
+  if (!gsConfig.apiKey && !localStorage.getItem('budgetflow_gs')) {
+    // No Sheets configured — skip PIN
+    return;
+  }
+
+  updateSyncStatus('syncing', 'Beveiliging controleren...');
+  const stored = await getPinFromSheet();
+  updateSyncStatus('idle');
+
+  if (!stored) {
+    // No PIN set yet
+    return;
+  }
+
+  // Show lock screen
+  pinMode = 'enter';
+  pinBuffer = '';
+  pinAttempts = 0;
+  updatePinUI();
+  screen.style.display = 'flex';
+  document.getElementById('pinForgot').style.display = 'none';
+  document.addEventListener('keydown', onPinKeydown);
+}
+
+function onPinKeydown(e) {
+  if (document.getElementById('pinScreen').style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') pinKey(e.key);
+  if (e.key === 'Backspace') pinDelete();
+}
+
+function pinKey(digit) {
+  if (pinBuffer.length >= 8) return;
+  pinBuffer += digit;
+  updatePinDots();
+  if (pinBuffer.length === 8) setTimeout(() => handlePinComplete(), 120);
+}
+
+function pinDelete() {
+  if (pinBuffer.length > 0) { pinBuffer = pinBuffer.slice(0,-1); updatePinDots(); }
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 8; i++) {
+    const dot = document.getElementById('dot'+i);
+    if (!dot) continue;
+    dot.classList.toggle('filled', i < pinBuffer.length);
+    dot.classList.remove('error');
+  }
+}
+
+function updatePinUI() {
+  const sub = document.getElementById('pinSub');
+  if (!sub) return;
+  if (pinMode === 'enter')   sub.textContent = 'Voer je 8-cijferige pincode in';
+  if (pinMode === 'setup')   sub.textContent = 'Kies een 8-cijferige pincode';
+  if (pinMode === 'confirm') sub.textContent = 'Bevestig je pincode';
+  updatePinDots();
+}
+
+async function handlePinComplete() {
+  if (pinMode === 'enter') {
+    document.getElementById('pinSub').textContent = 'Controleren...';
+    const stored = await getPinFromSheet();
+    if (hashPin(pinBuffer) === stored) {
+      pinAttempts = 0;
+      document.removeEventListener('keydown', onPinKeydown);
+      const screen = document.getElementById('pinScreen');
+      screen.style.transition = 'opacity 0.3s ease';
+      screen.style.opacity = '0';
+      setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
+    } else {
+      pinAttempts++;
+      pinBuffer = '';
+      shakeDots();
+      if (pinAttempts >= PIN_MAX_ATTEMPTS) {
+        document.getElementById('pinForgot').style.display = 'block';
+        document.getElementById('pinSub').textContent = 'Te veel pogingen — wacht 30 seconden';
+        setTimeout(() => {
+          pinAttempts = 0;
+          document.getElementById('pinSub').textContent = 'Voer je 8-cijferige pincode in';
+        }, 30000);
+      } else {
+        document.getElementById('pinSub').textContent = `Verkeerd — nog ${PIN_MAX_ATTEMPTS - pinAttempts} poging${PIN_MAX_ATTEMPTS - pinAttempts !== 1 ? 'en' : ''}`;
+      }
+    }
+  } else if (pinMode === 'setup') {
+    pinTemp = pinBuffer;
+    pinBuffer = '';
+    pinMode = 'confirm';
+    updatePinUI();
+  } else if (pinMode === 'confirm') {
+    if (pinBuffer === pinTemp) {
+      document.getElementById('pinSub').textContent = 'Opslaan...';
+      await savePinToSheet(hashPin(pinBuffer));
+      pinBuffer = ''; pinTemp = '';
+      const screen = document.getElementById('pinScreen');
+      screen.style.transition = 'opacity 0.3s ease';
+      screen.style.opacity = '0';
+      setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
+      showToast('Pincode opgeslagen in Google Sheets!', 'success');
+      document.removeEventListener('keydown', onPinKeydown);
+    } else {
+      pinBuffer = ''; pinTemp = '';
+      pinMode = 'setup';
+      shakeDots();
+      document.getElementById('pinSub').textContent = 'Komt niet overeen — probeer opnieuw';
+    }
+  }
+}
+
+function shakeDots() {
+  const dots = document.getElementById('pinDots');
+  dots.classList.remove('shake');
+  void dots.offsetWidth;
+  dots.classList.add('shake');
+  for (let i = 0; i < 8; i++) {
+    const dot = document.getElementById('dot'+i);
+    if (dot) dot.classList.add('error');
+  }
+  setTimeout(() => { dots.classList.remove('shake'); updatePinDots(); }, 500);
+}
+
+async function pinReset() {
+  // Must verify current PIN via Sheets before resetting
+  pinBuffer = '';
+  pinTemp = '';
+  pinMode = 'enter';
+  const screen = document.getElementById('pinScreen');
+  screen.style.display = 'flex';
+  document.getElementById('pinSub').textContent = 'Voer huidige pincode in om te resetten';
+  document.getElementById('pinForgot').style.display = 'none';
+  // Override handlePinComplete temporarily
+  window._pinResetMode = true;
+  updatePinDots();
+  document.addEventListener('keydown', onPinKeydown);
+}
+
+async function setupPin() {
+  const screen = document.getElementById('pinScreen');
+  pinMode = 'setup';
+  pinBuffer = ''; pinTemp = '';
+  updatePinUI();
+  screen.style.display = 'flex';
+  document.addEventListener('keydown', onPinKeydown);
+}
+
+
 /* ═══════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════ */
@@ -1610,6 +1807,7 @@ function init(){
   updateCatFilter();
   renderDashboard();
   checkFirstVisit();
+  checkPinSetup();
   setTimeout(()=>checkBudgetNotifications(), 1500);
   // Auto-load from Sheets on startup if configured and not first visit
   if(!state.firstVisit && gsConfig.apiKey) {
