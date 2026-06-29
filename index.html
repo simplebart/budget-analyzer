@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
@@ -61,7 +62,7 @@
   <!-- MAIN CONTENT -->
   <main class="main" id="mainContent">
 
-    <!-- ══════════════════ DASHBOARD PAGE ══════════════════ -->
+    <!-- ══════════════ DASHBOARD ══════════════ -->
     <section class="page active" id="page-dashboard">
       <div class="page-header">
         <div>
@@ -70,61 +71,46 @@
         </div>
         <button class="btn-primary" onclick="openModal('addTransaction')">+ Transactie</button>
       </div>
-
-      <!-- KPI ROW -->
       <div class="kpi-grid" id="kpiGrid">
         <div class="kpi-card kpi-income">
-          <div class="kpi-top">
-            <span class="kpi-label">Inkomsten</span>
-            <span class="kpi-icon income-icon">↑</span>
-          </div>
+          <div class="kpi-top"><span class="kpi-label">Inkomsten</span><span class="kpi-icon income-icon">↑</span></div>
           <div class="kpi-value" id="kpiIncome">€0</div>
-          <div class="kpi-bar-wrap"><div class="kpi-bar income-bar" id="kpiIncomeBar" style="width:100%"></div></div>
+          <div class="kpi-bar-wrap"><div class="kpi-bar income-bar" style="width:100%"></div></div>
         </div>
         <div class="kpi-card kpi-expense">
-          <div class="kpi-top">
-            <span class="kpi-label">Uitgaven</span>
-            <span class="kpi-icon expense-icon">↓</span>
-          </div>
+          <div class="kpi-top"><span class="kpi-label">Uitgaven</span><span class="kpi-icon expense-icon">↓</span></div>
           <div class="kpi-value" id="kpiExpense">€0</div>
           <div class="kpi-bar-wrap"><div class="kpi-bar expense-bar" id="kpiExpenseBar" style="width:0%"></div></div>
         </div>
+        <div class="kpi-card kpi-transfer">
+          <div class="kpi-top"><span class="kpi-label">Transfers</span><span class="kpi-icon transfer-icon">⇄</span></div>
+          <div class="kpi-value" id="kpiTransfer">€0</div>
+          <div class="kpi-sub" id="kpiTransferSub">0 transfers</div>
+        </div>
         <div class="kpi-card kpi-balance">
-          <div class="kpi-top">
-            <span class="kpi-label">Netto saldo</span>
-            <span class="kpi-icon" id="kpiBalIcon">◎</span>
-          </div>
+          <div class="kpi-top"><span class="kpi-label">Netto saldo</span><span class="kpi-icon" id="kpiBalIcon">◎</span></div>
           <div class="kpi-value" id="kpiBalance">€0</div>
           <div class="kpi-sub" id="kpiBalSub">van inkomsten</div>
         </div>
         <div class="kpi-card kpi-score">
-          <div class="kpi-top">
-            <span class="kpi-label">Budget score</span>
-            <span class="kpi-icon score-icon">★</span>
-          </div>
+          <div class="kpi-top"><span class="kpi-label">Budget score</span><span class="kpi-icon score-icon">★</span></div>
           <div class="kpi-value" id="kpiScore">—</div>
           <div class="kpi-sub" id="kpiScoreLabel">Voeg data toe</div>
         </div>
       </div>
-
-      <!-- CHARTS ROW -->
       <div class="charts-row">
         <div class="card chart-card">
           <div class="card-header">
             <span class="card-title">Cashflow overzicht</span>
             <div class="chart-legend" id="cashflowLegend"></div>
           </div>
-          <div class="chart-wrap" style="height:220px">
-            <canvas id="cashflowChart" aria-label="Cashflow staafdiagram per maand"></canvas>
-          </div>
+          <div class="chart-wrap" style="height:220px"><canvas id="cashflowChart" aria-label="Cashflow staafdiagram per maand"></canvas></div>
         </div>
         <div class="card chart-card">
-          <div class="card-header">
-            <span class="card-title">Uitgaven per categorie</span>
-          </div>
+          <div class="card-header"><span class="card-title">Uitgaven per categorie</span></div>
           <div class="donut-wrap">
             <canvas id="donutChart" aria-label="Donut chart uitgaven per categorie"></canvas>
-            <div class="donut-center" id="donutCenter">
+            <div class="donut-center">
               <div class="donut-total" id="donutTotal">€0</div>
               <div class="donut-lbl">totaal</div>
             </div>
@@ -132,19 +118,14 @@
           <div class="donut-legend" id="donutLegend"></div>
         </div>
       </div>
-
-      <!-- BOTTOM ROW -->
       <div class="bottom-row">
-        <!-- Health score -->
         <div class="card health-card">
           <div class="card-header"><span class="card-title">Budget gezondheid</span></div>
           <div class="health-body">
             <div class="health-ring-wrap">
               <svg class="health-svg" viewBox="0 0 120 120">
                 <circle cx="60" cy="60" r="48" class="ring-bg"/>
-                <circle cx="60" cy="60" r="48" class="ring-fill" id="healthRing"
-                  stroke-dasharray="301.6" stroke-dashoffset="301.6"
-                  transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="48" class="ring-fill" id="healthRing" stroke-dasharray="301.6" stroke-dashoffset="301.6" transform="rotate(-90 60 60)"/>
               </svg>
               <div class="health-center">
                 <div class="health-score" id="healthScore">0</div>
@@ -154,64 +135,46 @@
             <div class="health-breakdown" id="healthBreakdown"></div>
           </div>
         </div>
-
-        <!-- Recent transactions -->
         <div class="card recent-card">
           <div class="card-header">
             <span class="card-title">Recente transacties</span>
             <button class="link-btn" onclick="navigate('transactions')">Alles zien →</button>
           </div>
-          <div class="tx-mini-list" id="recentTxList">
-            <div class="empty-state">Nog geen transacties</div>
-          </div>
+          <div class="tx-mini-list" id="recentTxList"><div class="empty-state">Nog geen transacties</div></div>
         </div>
-
-        <!-- Burn rate -->
         <div class="card burn-card">
           <div class="card-header"><span class="card-title">Burn rate</span></div>
           <div class="burn-stats">
-            <div class="burn-stat">
-              <div class="burn-val" id="burnDaily">€0</div>
-              <div class="burn-lbl">per dag</div>
-            </div>
+            <div class="burn-stat"><div class="burn-val" id="burnDaily">€0</div><div class="burn-lbl">per dag</div></div>
             <div class="burn-divider"></div>
-            <div class="burn-stat">
-              <div class="burn-val" id="burnWeekly">€0</div>
-              <div class="burn-lbl">per week</div>
-            </div>
+            <div class="burn-stat"><div class="burn-val" id="burnWeekly">€0</div><div class="burn-lbl">per week</div></div>
             <div class="burn-divider"></div>
-            <div class="burn-stat">
-              <div class="burn-val" id="burnProjected">€0</div>
-              <div class="burn-lbl">projectie</div>
-            </div>
+            <div class="burn-stat"><div class="burn-val" id="burnProjected">€0</div><div class="burn-lbl">projectie</div></div>
           </div>
           <div class="projection-bar-wrap">
-            <div class="proj-labels">
-              <span>Huidig</span><span id="projLabel">Einde maand</span>
-            </div>
+            <div class="proj-labels"><span>Huidig</span><span>Einde maand</span></div>
             <div class="proj-track">
               <div class="proj-fill" id="projFill" style="width:0%"></div>
               <div class="proj-marker" id="projMarker" style="left:0%"></div>
             </div>
-            <div class="proj-values">
-              <span id="projCurrent">€0</span><span id="projEnd">€0</span>
-            </div>
+            <div class="proj-values"><span id="projCurrent">€0</span><span id="projEnd">€0</span></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ══════════════════ TRANSACTIONS PAGE ══════════════════ -->
+    <!-- ══════════════ TRANSACTIONS ══════════════ -->
     <section class="page" id="page-transactions">
       <div class="page-header">
         <div>
           <h1 class="page-title">Transacties</h1>
           <p class="page-sub" id="txPageSub"></p>
         </div>
-        <button class="btn-primary" onclick="openModal('addTransaction')">+ Toevoegen</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" onclick="openModal('importCSV')">↑ CSV importeren</button>
+          <button class="btn-primary" onclick="openModal('addTransaction')">+ Toevoegen</button>
+        </div>
       </div>
-
-      <!-- FILTERS -->
       <div class="filter-bar">
         <div class="filter-group">
           <label class="filter-label">Type</label>
@@ -219,6 +182,7 @@
             <button class="pill active" data-filter="type" data-value="all" onclick="setFilter('type','all',this)">Alles</button>
             <button class="pill" data-filter="type" data-value="income" onclick="setFilter('type','income',this)">Inkomsten</button>
             <button class="pill" data-filter="type" data-value="expense" onclick="setFilter('type','expense',this)">Uitgaven</button>
+            <button class="pill" data-filter="type" data-value="transfer" onclick="setFilter('type','transfer',this)">Transfers</button>
           </div>
         </div>
         <div class="filter-group">
@@ -240,94 +204,59 @@
           <input class="filter-search" type="text" placeholder="Zoeken..." id="txSearch" oninput="setFilter('search',this.value)" />
         </div>
       </div>
-
-      <!-- TX TABLE -->
       <div class="card">
         <table class="tx-table">
           <thead>
             <tr>
-              <th>Omschrijving</th>
-              <th>Categorie</th>
-              <th>Datum</th>
-              <th class="right">Bedrag</th>
-              <th></th>
+              <th>Omschrijving</th><th>Categorie</th><th>Datum</th><th class="right">Bedrag</th><th></th>
             </tr>
           </thead>
-          <tbody id="txTableBody">
-            <tr><td colspan="5" class="empty-state">Nog geen transacties</td></tr>
-          </tbody>
+          <tbody id="txTableBody"><tr><td colspan="5" class="empty-state">Nog geen transacties</td></tr></tbody>
         </table>
       </div>
-
-      <!-- SUMMARY BAR -->
       <div class="tx-summary" id="txSummary"></div>
     </section>
 
-    <!-- ══════════════════ ANALYTICS PAGE ══════════════════ -->
+    <!-- ══════════════ ANALYTICS ══════════════ -->
     <section class="page" id="page-analytics">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Analytics</h1>
-          <p class="page-sub">Diepgaand inzicht in je financiën</p>
-        </div>
+        <div><h1 class="page-title">Analytics</h1><p class="page-sub">Diepgaand inzicht in je financiën</p></div>
         <div class="period-switcher">
           <button class="pill active" onclick="setPeriod('month',this)">Maand</button>
           <button class="pill" onclick="setPeriod('quarter',this)">Kwartaal</button>
           <button class="pill" onclick="setPeriod('year',this)">Jaar</button>
         </div>
       </div>
-
-      <!-- ANALYTICS GRID -->
       <div class="analytics-grid">
         <div class="card analytics-card-wide">
-          <div class="card-header">
-            <span class="card-title">Inkomsten vs Uitgaven</span>
-            <div id="incExpLegend" class="chart-legend"></div>
-          </div>
-          <div class="chart-wrap" style="height:240px">
-            <canvas id="incExpChart" aria-label="Inkomsten versus uitgaven over tijd"></canvas>
-          </div>
+          <div class="card-header"><span class="card-title">Inkomsten vs Uitgaven</span><div id="incExpLegend" class="chart-legend"></div></div>
+          <div class="chart-wrap" style="height:240px"><canvas id="incExpChart" aria-label="Inkomsten versus uitgaven over tijd"></canvas></div>
         </div>
-
         <div class="card">
           <div class="card-header"><span class="card-title">Categorie trend</span></div>
-          <div class="chart-wrap" style="height:220px">
-            <canvas id="catTrendChart" aria-label="Uitgaven per categorie trend"></canvas>
-          </div>
+          <div class="chart-wrap" style="height:220px"><canvas id="catTrendChart" aria-label="Uitgaven per categorie trend"></canvas></div>
         </div>
-
         <div class="card">
           <div class="card-header"><span class="card-title">Spaarquote</span></div>
-          <div class="chart-wrap" style="height:220px">
-            <canvas id="savingsRateChart" aria-label="Maandelijkse spaarquote"></canvas>
-          </div>
+          <div class="chart-wrap" style="height:220px"><canvas id="savingsRateChart" aria-label="Maandelijkse spaarquote"></canvas></div>
         </div>
-
         <div class="card analytics-card-wide">
           <div class="card-header"><span class="card-title">Uitgavenpatroon per weekdag</span></div>
-          <div class="chart-wrap" style="height:200px">
-            <canvas id="weekdayChart" aria-label="Gemiddelde uitgaven per dag van de week"></canvas>
-          </div>
+          <div class="chart-wrap" style="height:200px"><canvas id="weekdayChart" aria-label="Gemiddelde uitgaven per dag van de week"></canvas></div>
         </div>
       </div>
-
-      <!-- INSIGHTS -->
       <div class="card insights-card">
         <div class="card-header"><span class="card-title">Automatische inzichten</span></div>
         <div class="insights-grid" id="insightsGrid"></div>
       </div>
     </section>
 
-    <!-- ══════════════════ BUDGET PAGE ══════════════════ -->
+    <!-- ══════════════ BUDGETTEN ══════════════ -->
     <section class="page" id="page-budget">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Budgetten</h1>
-          <p class="page-sub">Stel limieten in per categorie</p>
-        </div>
+        <div><h1 class="page-title">Budgetten</h1><p class="page-sub">Stel limieten in per categorie</p></div>
         <button class="btn-primary" onclick="openModal('addBudget')">+ Budget instellen</button>
       </div>
-
       <div class="budget-grid" id="budgetGrid">
         <div class="empty-card">
           <div class="empty-icon">◎</div>
@@ -338,16 +267,12 @@
       </div>
     </section>
 
-    <!-- ══════════════════ GOALS PAGE ══════════════════ -->
+    <!-- ══════════════ DOELEN ══════════════ -->
     <section class="page" id="page-goals">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Spaardoelen</h1>
-          <p class="page-sub">Werk toe naar je financiële doelen</p>
-        </div>
+        <div><h1 class="page-title">Spaardoelen</h1><p class="page-sub">Werk toe naar je financiële doelen</p></div>
         <button class="btn-primary" onclick="openModal('addGoal')">+ Doel toevoegen</button>
       </div>
-
       <div class="goals-grid" id="goalsGrid">
         <div class="empty-card">
           <div class="empty-icon">★</div>
@@ -358,33 +283,23 @@
       </div>
     </section>
 
-    <!-- ══════════════════ SETTINGS PAGE ══════════════════ -->
+    <!-- ══════════════ INSTELLINGEN ══════════════ -->
     <section class="page" id="page-settings">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">Instellingen</h1>
-          <p class="page-sub">Pas de app aan naar jouw wensen</p>
-        </div>
+        <div><h1 class="page-title">Instellingen</h1><p class="page-sub">Pas de app aan naar jouw wensen</p></div>
       </div>
-
       <div class="settings-grid">
         <div class="card settings-card">
           <div class="settings-section-title">Weergave</div>
           <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-name">Thema</div>
-              <div class="setting-desc">Licht of donker kleurenschema</div>
-            </div>
+            <div class="setting-info"><div class="setting-name">Thema</div><div class="setting-desc">Licht of donker kleurenschema</div></div>
             <div class="pill-group">
               <button class="pill active" id="themeLight" onclick="setTheme('light')">Licht</button>
               <button class="pill" id="themeDark" onclick="setTheme('dark')">Donker</button>
             </div>
           </div>
           <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-name">Valuta</div>
-              <div class="setting-desc">Symbool voor bedragen</div>
-            </div>
+            <div class="setting-info"><div class="setting-name">Valuta</div><div class="setting-desc">Symbool voor bedragen</div></div>
             <select class="filter-select" id="currencySelect" onchange="setCurrency(this.value)">
               <option value="€">€ Euro</option>
               <option value="$">$ Dollar</option>
@@ -393,10 +308,7 @@
             </select>
           </div>
           <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-name">Maandinkomen</div>
-              <div class="setting-desc">Stel je vaste maandinkomen in</div>
-            </div>
+            <div class="setting-info"><div class="setting-name">Maandinkomen</div><div class="setting-desc">Stel je vaste maandinkomen in</div></div>
             <div class="inline-input-row">
               <input type="number" class="filter-select" id="incomeInput" placeholder="2500" style="width:100px" />
               <button class="btn-primary-sm" onclick="saveIncome()">Opslaan</button>
@@ -405,26 +317,32 @@
         </div>
 
         <div class="card settings-card">
+          <div class="settings-section-title">Categorieën beheren</div>
+          <div id="catManageList" style="margin-bottom:12px"></div>
+          <div class="inline-input-row" style="gap:6px">
+            <input type="text" class="form-input" id="newCatName" placeholder="Nieuwe categorie..." style="flex:1" />
+            <input type="text" class="form-input" id="newCatEmoji" placeholder="🏷" style="width:52px;text-align:center" maxlength="2" />
+            <input type="color" id="newCatColor" value="#6c8aff" style="width:36px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:var(--bg3)" />
+            <button class="btn-primary-sm" onclick="addCategory()">+ Toevoegen</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
           <div class="settings-section-title">Data</div>
           <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-name">Demo data laden</div>
-              <div class="setting-desc">Laad voorbeeldtransacties om de app te verkennen</div>
-            </div>
+            <div class="setting-info"><div class="setting-name">CSV importeren</div><div class="setting-desc">Importeer transacties vanuit je bank</div></div>
+            <button class="btn-secondary" onclick="openModal('importCSV')">↑ Importeren</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Data exporteren</div><div class="setting-desc">Download al je transacties als CSV</div></div>
+            <button class="btn-secondary" onclick="exportCSV()">↓ Export CSV</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-name">Demo data laden</div><div class="setting-desc">Laad voorbeeldtransacties om de app te verkennen</div></div>
             <button class="btn-secondary" onclick="loadDemoData()">Laad demo</button>
           </div>
           <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-name">Data exporteren</div>
-              <div class="setting-desc">Download al je transacties als CSV</div>
-            </div>
-            <button class="btn-secondary" onclick="exportCSV()">Export CSV</button>
-          </div>
-          <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-name">Alles wissen</div>
-              <div class="setting-desc">Verwijder alle transacties en instellingen</div>
-            </div>
+            <div class="setting-info"><div class="setting-name">Alles wissen</div><div class="setting-desc">Verwijder alle transacties en instellingen</div></div>
             <button class="btn-danger" onclick="clearAllData()">Wissen</button>
           </div>
         </div>
@@ -445,10 +363,10 @@
     </section>
   </main>
 
-  <!-- ══════════════════ MODALS ══════════════════ -->
+  <!-- ══════════════ MODALS ══════════════ -->
   <div class="modal-backdrop" id="modalBackdrop" onclick="closeModal()"></div>
 
-  <!-- Add Transaction Modal -->
+  <!-- ADD TRANSACTION -->
   <div class="modal" id="modal-addTransaction">
     <div class="modal-header">
       <h2 class="modal-title">Transactie toevoegen</h2>
@@ -458,10 +376,11 @@
       <div class="type-toggle">
         <button class="type-btn active" id="typeBtnIncome" onclick="setTxType('income')">↑ Inkomst</button>
         <button class="type-btn" id="typeBtnExpense" onclick="setTxType('expense')">↓ Uitgave</button>
+        <button class="type-btn" id="typeBtnTransfer" onclick="setTxType('transfer')">⇄ Transfer</button>
       </div>
       <div class="form-group">
         <label class="form-label">Omschrijving</label>
-        <input class="form-input" type="text" id="txDesc" placeholder="bijv. Salaris, Huur, Albert Heijn..." />
+        <input class="form-input" type="text" id="txDesc" placeholder="bijv. Salaris, Huur, Spaarrekening..." />
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -478,18 +397,19 @@
       </div>
       <div class="form-group" id="catGroupWrap">
         <label class="form-label">Categorie</label>
-        <select class="form-input" id="txCat">
-          <option value="Wonen">🏠 Wonen</option>
-          <option value="Boodschappen">🛒 Boodschappen</option>
-          <option value="Transport">🚌 Transport</option>
-          <option value="Eten & Drinken">🍽 Eten & Drinken</option>
-          <option value="Gezondheid">💊 Gezondheid</option>
-          <option value="Vrije tijd">🎮 Vrije tijd</option>
-          <option value="Abonnementen">📱 Abonnementen</option>
-          <option value="Kleding">👕 Kleding</option>
-          <option value="Sparen">💰 Sparen</option>
-          <option value="Overig">📦 Overig</option>
-        </select>
+        <select class="form-input" id="txCat"></select>
+      </div>
+      <div class="form-group" id="transferAccountsWrap" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Van rekening</label>
+            <input class="form-input" type="text" id="txFromAccount" placeholder="bijv. Betaalrekening" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Naar rekening</label>
+            <input class="form-input" type="text" id="txToAccount" placeholder="bijv. Spaarrekening" />
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Notitie (optioneel)</label>
@@ -502,7 +422,7 @@
     </div>
   </div>
 
-  <!-- Add Budget Modal -->
+  <!-- ADD BUDGET -->
   <div class="modal" id="modal-addBudget">
     <div class="modal-header">
       <h2 class="modal-title">Budget instellen</h2>
@@ -511,17 +431,7 @@
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label">Categorie</label>
-        <select class="form-input" id="budgetCat">
-          <option value="Wonen">🏠 Wonen</option>
-          <option value="Boodschappen">🛒 Boodschappen</option>
-          <option value="Transport">🚌 Transport</option>
-          <option value="Eten & Drinken">🍽 Eten & Drinken</option>
-          <option value="Gezondheid">💊 Gezondheid</option>
-          <option value="Vrije tijd">🎮 Vrije tijd</option>
-          <option value="Abonnementen">📱 Abonnementen</option>
-          <option value="Kleding">👕 Kleding</option>
-          <option value="Overig">📦 Overig</option>
-        </select>
+        <select class="form-input" id="budgetCat"></select>
       </div>
       <div class="form-group">
         <label class="form-label">Maandlimiet</label>
@@ -537,7 +447,7 @@
     </div>
   </div>
 
-  <!-- Add Goal Modal -->
+  <!-- ADD GOAL -->
   <div class="modal" id="modal-addGoal">
     <div class="modal-header">
       <h2 class="modal-title">Spaardoel toevoegen</h2>
@@ -576,6 +486,67 @@
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
       <button class="btn-primary" onclick="saveGoal()">Opslaan</button>
+    </div>
+  </div>
+
+  <!-- CSV IMPORT MODAL -->
+  <div class="modal modal-wide" id="modal-importCSV">
+    <div class="modal-header">
+      <h2 class="modal-title">CSV importeren</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- STAP 1: Bestand kiezen -->
+      <div id="csvStep1">
+        <div class="csv-bank-row">
+          <label class="form-label" style="margin-bottom:8px;display:block">Bankformaat (optioneel — voor automatische kolomdetectie)</label>
+          <div class="pill-group" style="flex-wrap:wrap;gap:6px">
+            <button class="pill active" onclick="selectBank('auto',this)">Automatisch</button>
+            <button class="pill" onclick="selectBank('ing',this)">ING</button>
+            <button class="pill" onclick="selectBank('rabo',this)">Rabobank</button>
+            <button class="pill" onclick="selectBank('abn',this)">ABN AMRO</button>
+            <button class="pill" onclick="selectBank('sns',this)">SNS</button>
+            <button class="pill" onclick="selectBank('generic',this)">Overig</button>
+          </div>
+        </div>
+        <div class="csv-dropzone" id="csvDropzone" onclick="document.getElementById('csvFileInput').click()">
+          <div class="csv-drop-icon">↑</div>
+          <div class="csv-drop-title">Klik of sleep je CSV bestand hier</div>
+          <div class="csv-drop-sub">Exporteer vanuit je bankapp en upload hier</div>
+          <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none" onchange="handleCSVFile(this.files[0])" />
+        </div>
+        <div class="csv-tip">
+          <strong>Hoe exporteer je vanuit je bank?</strong><br>
+          ING: Mijn ING → Betaalrekening → Downloaden → CSV &nbsp;|&nbsp;
+          Rabobank: Rekeningoverzicht → Exporteren → CSV &nbsp;|&nbsp;
+          ABN: Overzicht → Download → Kommagescheiden
+        </div>
+      </div>
+
+      <!-- STAP 2: Kolommen mappen -->
+      <div id="csvStep2" style="display:none">
+        <div class="csv-step-title">Stap 2 — Koppel de kolommen</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">We hebben <span id="csvRowCount">0</span> rijen gevonden. Koppel hieronder welke kolom wat betekent.</p>
+        <div class="csv-map-grid" id="csvMapGrid"></div>
+        <div class="csv-preview-title">Voorbeeld (eerste 5 rijen)</div>
+        <div class="csv-preview-wrap">
+          <table class="csv-preview-table" id="csvPreviewTable"></table>
+        </div>
+      </div>
+
+      <!-- STAP 3: Bevestigen -->
+      <div id="csvStep3" style="display:none">
+        <div class="csv-step-title">Stap 3 — Controleer en importeer</div>
+        <div class="csv-import-summary" id="csvImportSummary"></div>
+        <div class="csv-preview-wrap" style="max-height:260px">
+          <table class="csv-preview-table" id="csvFinalTable"></table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="csvModalFooter">
+      <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
+      <button class="btn-primary" id="csvNextBtn" onclick="csvNext()" style="display:none">Volgende →</button>
     </div>
   </div>
 
