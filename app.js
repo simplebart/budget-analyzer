@@ -1083,24 +1083,72 @@ function renderTransactions(){
    ═══════════════════════════════════════════════ */
 function renderAnalytics(){
   const{grid,text}=chartColors();
-  const nM=state.analyticsPeriod==='year'?12:6;
-  const periods=[];
-  for(let i=nM-1;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);periods.push({prefix:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,label:d.toLocaleDateString('nl-NL',{month:'short'})});}
-  const labels=periods.map(p=>p.label);
-  const incArr=periods.map(p=>Math.round(state.transactions.filter(t=>t.date.startsWith(p.prefix)&&t.type==='income').reduce((a,t)=>a+t.amt,0)));
-  const expArr=periods.map(p=>Math.round(state.transactions.filter(t=>t.date.startsWith(p.prefix)&&t.type==='expense').reduce((a,t)=>a+t.amt,0)));
+  const subEl = document.getElementById('analyticsSub');
+  if (subEl) {
+    if (state.analyticsPeriod === 'month')   subEl.textContent = `Per dag — ${cycleLabel()}`;
+    if (state.analyticsPeriod === 'quarter') subEl.textContent = 'Per week — laatste 13 weken';
+    if (state.analyticsPeriod === 'year')    subEl.textContent = 'Per maand — laatste 12 maanden';
+  }
+
+  /* ── Bouw periode-buckets afhankelijk van de gekozen modus ── */
+  let periods = [];
+  const today = new Date();
+
+  if (state.analyticsPeriod === 'month') {
+    // Toon elke dag van de huidige budgetcyclus
+    const { start, end } = getCurrentCycleRange();
+    let d = new Date(start);
+    while (d <= end) {
+      periods.push({
+        match: t => t.date === dateToStr(d),
+        label: d.getDate().toString()
+      });
+      d.setDate(d.getDate() + 1);
+    }
+  } else if (state.analyticsPeriod === 'quarter') {
+    // Toon elke week van de laatste 13 weken (~kwartaal)
+    for (let i = 12; i >= 0; i--) {
+      const weekEnd = new Date(today);
+      weekEnd.setDate(weekEnd.getDate() - (i * 7));
+      const weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() - 6);
+      const ws = dateToStr(weekStart), we = dateToStr(weekEnd);
+      periods.push({
+        match: t => t.date >= ws && t.date <= we,
+        label: weekStart.toLocaleDateString('nl-NL', { day:'numeric', month:'short' })
+      });
+    }
+  } else {
+    // Jaar: toon elke maand van de laatste 12 maanden
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(); d.setMonth(d.getMonth() - i);
+      const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      periods.push({
+        match: t => t.date.startsWith(prefix),
+        label: d.toLocaleDateString('nl-NL', { month:'short' })
+      });
+    }
+  }
+
+  const labels = periods.map(p => p.label);
+  const incArr = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const expArr = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
+
   const ctx1=document.getElementById('incExpChart').getContext('2d');
   if(charts.incExp)charts.incExp.destroy();
-  charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[{label:'Inkomsten',data:incArr,borderColor:'#34d48a',backgroundColor:'rgba(52,212,138,0.08)',tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#34d48a'},{label:'Uitgaven',data:expArr,borderColor:'#ff5e6c',backgroundColor:'rgba(255,94,108,0.08)',tension:0.4,fill:true,pointRadius:4,pointBackgroundColor:'#ff5e6c'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[{label:'Inkomsten',data:incArr,borderColor:'#34d48a',backgroundColor:'rgba(52,212,138,0.08)',tension:0.4,fill:true,pointRadius:state.analyticsPeriod==='month'?2:4,pointBackgroundColor:'#34d48a'},{label:'Uitgaven',data:expArr,borderColor:'#ff5e6c',backgroundColor:'rgba(255,94,108,0.08)',tension:0.4,fill:true,pointRadius:state.analyticsPeriod==='month'?2:4,pointBackgroundColor:'#ff5e6c'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:state.analyticsPeriod==='month'?15:13}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
   document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+
   const topCats=Object.entries(state.transactions.filter(t=>t.type==='expense').reduce((a,t)=>{a[t.cat]=(a[t.cat]||0)+t.amt;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
   const ctx2=document.getElementById('catTrendChart').getContext('2d');
   if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.date.startsWith(p.prefix)&&t.type==='expense'&&t.cat===cat).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:3}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.date.startsWith(p.prefix)&&t.type==='income').reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.date.startsWith(p.prefix)&&t.type==='expense').reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
+  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:state.analyticsPeriod==='month'?2:3}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:state.analyticsPeriod==='month'?15:13}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+
+  const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
   const ctx3=document.getElementById('savingsRateChart').getContext('2d');
   if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(52,212,138,0.75)':v>=0?'rgba(255,179,64,0.75)':'rgba(255,94,108,0.75)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(52,212,138,0.75)':v>=0?'rgba(255,179,64,0.75)':'rgba(255,94,108,0.75)'),borderRadius:state.analyticsPeriod==='month'?2:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:state.analyticsPeriod==='month'?15:13}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+
   const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
   state.transactions.filter(t=>t.type==='expense').forEach(t=>{const d=(new Date(t.date).getDay()+6)%7;wd[d]+=t.amt;wc[d]++;});
   const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
