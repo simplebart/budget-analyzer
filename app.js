@@ -157,7 +157,7 @@ function navigate(page) {
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page]||page;
   if (window.innerWidth <= 900) closeSidebar();
   if (page==='dashboard')    renderDashboard();
-  if (page==='transactions') renderTransactions();
+  if (page==='transactions') { resetTxFilters(); renderTransactions(); }
   if (page==='analytics')    renderAnalytics();
   if (page==='budget')       renderBudgets();
   if (page==='goals')        renderGoals();
@@ -288,6 +288,18 @@ function renderCatManageList() {
 /* ═══════════════════════════════════════════════
    FILTERS
    ═══════════════════════════════════════════════ */
+function resetTxFilters() {
+  state.filters = { type:'all', cat:'all', sort:'date-desc', search:'' };
+  // Reset pill UI for type filter
+  document.querySelectorAll('#page-transactions .filter-bar [data-filter="type"]').forEach((p,i) => {
+    p.classList.toggle('active', p.dataset.value === 'all');
+  });
+  const search = document.getElementById('txSearch');
+  if (search) search.value = '';
+  const sortSel = document.getElementById('sortFilter');
+  if (sortSel) sortSel.value = 'date-desc';
+}
+
 function setFilter(key, val, el) {
   state.filters[key] = val;
   if (el) {
@@ -320,6 +332,8 @@ function updateCatFilter() {
   if (!sel) return;
   const cats = [...new Set(state.transactions.map(t=>t.cat))].sort();
   sel.innerHTML = '<option value="all">Alle categorieën</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  // Houd de huidige filterselectie zichtbaar in de dropdown
+  sel.value = state.filters.cat;
 }
 
 /* ═══════════════════════════════════════════════
