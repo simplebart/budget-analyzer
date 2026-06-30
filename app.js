@@ -1111,13 +1111,14 @@ function renderAnalytics(){
   if (state.analyticsPeriod === 'month') {
     // Toon elke dag van de huidige budgetcyclus
     const { start, end } = getCurrentCycleRange();
-    let d = new Date(start);
-    while (d <= end) {
+    let cursor = new Date(start);
+    while (cursor <= end) {
+      const dayStr = dateToStr(cursor); // bevries de waarde per iteratie — geen closure-bug
       periods.push({
-        match: t => t.date === dateToStr(d),
-        label: d.getDate().toString()
+        match: t => t.date === dayStr,
+        label: cursor.getDate().toString()
       });
-      d.setDate(d.getDate() + 1);
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
     }
   } else if (state.analyticsPeriod === 'quarter') {
     // Toon elke week van de laatste 13 weken (~kwartaal)
