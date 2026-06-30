@@ -47,7 +47,14 @@ const SAVINGS_COLORS = ['#34d48a','#6c8aff','#ffb340','#f472b6','#a78bfa','#22d3
    ═══════════════════════════════════════════════ */
 const fmt = n => state.settings.currency + Math.abs(Math.round(n * 100) / 100).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
 const fmtSigned = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n));
-const today = () => new Date().toISOString().split('T')[0];
+/* Tijdzone-veilige datumfunctie: gebruikt ALTIJD de lokale datum,
+   nooit UTC. toISOString() converteert naar UTC, wat in Nederland/België
+   (UTC+1 of UTC+2) ervoor zorgt dat datums rond middernacht naar de
+   verkeerde dag verschuiven. Dit was de oorzaak van de mei/juni-bug. */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 const getDayOfMonth = () => new Date().getDate();
 const getDaysInMonth = () => new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
 const monthName = d => d.toLocaleDateString('nl-NL', { month:'long', year:'numeric' });
@@ -186,7 +193,7 @@ function openModal(id) {
   if (id==='addGoal') {
     renderGoalColorPicker();
     const d=new Date(); d.setFullYear(d.getFullYear()+1);
-    document.getElementById('goalDate').value = d.toISOString().split('T')[0];
+    document.getElementById('goalDate').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
   if (id==='importCSV') resetCSVModal();
   if (id==='addSavingsAccount') {
@@ -523,7 +530,9 @@ function renderSavings() {
   } else {
     grid.innerHTML = accs.map(acc=>{
       const pct = acc.target>0 ? Math.min(100,Math.round((acc.balance/acc.target)*100)) : null;
-      const monthlyTxs = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date.startsWith(new Date().toISOString().slice(0,7)));
+      const nowLocal = new Date();
+      const curMonthPrefix = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
+      const monthlyTxs = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date.startsWith(curMonthPrefix));
       const monthNet = monthlyTxs.reduce((a,t)=>a+(t.type==='withdrawal'?-t.amt:t.amt),0);
       return `<div class="savings-acc-card" style="border-top:3px solid ${acc.color}">
         <div class="savings-acc-header">
