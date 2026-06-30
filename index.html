@@ -362,6 +362,17 @@
               <button class="btn-primary-sm" onclick="saveIncome()">Opslaan</button>
             </div>
           </div>
+          <div class="setting-row" style="border-bottom:none">
+            <div class="setting-info">
+              <div class="setting-name">Budgetcyclus</div>
+              <div class="setting-desc">Begin van je budgetperiode — handig als je salaris niet op de 1e binnenkomt</div>
+            </div>
+            <div class="inline-input-row">
+              <span style="font-size:13px;color:var(--text2)">Start op dag</span>
+              <input type="number" class="filter-select" id="cycleStartInput" placeholder="1" min="1" max="28" style="width:64px" />
+              <button class="btn-primary-sm" onclick="saveCycleStart()">Opslaan</button>
+            </div>
+          </div>
         </div>
 
         <div class="card settings-card">
