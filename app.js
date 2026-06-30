@@ -1566,38 +1566,7 @@ function renderSyncSettings() {
    WELCOME SCREEN — minimal
    ═══════════════════════════════════════════════ */
 function checkFirstVisit() {
-  if (state.firstVisit) {
-    const ws = document.getElementById('welcomeScreen');
-    ws.style.display = 'flex';
-    // Allow Enter key to submit
-    const input = document.getElementById('welcomeNameInput');
-    if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') startApp(); });
-  } else {
-  }
-}
-
-function startApp() {
-  const nameEl = document.getElementById('welcomeNameInput');
-  const name = nameEl ? nameEl.value.trim() : '';
-  if (name) state.settings.userName = name;
-  state.firstVisit = false;
-  saveState(true);
-  const ws = document.getElementById('welcomeScreen');
-  ws.style.opacity = '0';
-  ws.style.transition = 'opacity 0.4s ease';
-  setTimeout(() => {
-    ws.style.display = 'none';
-  }, 400);
-  if (gsConfig.apiKey || localStorage.getItem('budgetflow_gs')) {
-    setTimeout(() => syncFromSheets(), 1200);
-  }
-}
-
-function startDemo() {
-  state.firstVisit = false;
-  const ws = document.getElementById('welcomeScreen');
-  ws.style.display = 'none';
-  loadDemoData();
+  // Naamscherm verwijderd op verzoek — niets te doen hier.
 }
 
 
@@ -1833,21 +1802,27 @@ function checkPinSetup() {
     const screen = document.getElementById('pinScreen');
     if (!screen) { resolve(); return; }
 
-    // Check if Sheets is configured — geen Sheets, geen PIN-bescherming mogelijk
-    const gsRaw = localStorage.getItem('budgetflow_gs');
-    const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
-    if (!gsConf || !gsConf.apiKey) { resolve(); return; }
-    gsConfig = { ...gsConfig, ...gsConf };
-
+    // GS_URL is hardcoded en werkt overal — geen lokale config nodig om de PIN te checken.
+    // Dit is de bewuste keuze: de pincode-check moet werken op élk apparaat,
+    // ook als dat apparaat zelf nooit een Sheets-verbinding heeft opgeslagen.
     let stored;
     try {
       stored = await getPinFromSheet();
     } catch(e) {
       // Sheets niet bereikbaar — uit voorzorg toch blokkeren i.p.v. doorlaten
-      stored = null;
+      console.error('PIN check kon Sheets niet bereiken:', e);
+      stored = '__UNREACHABLE__'; // forceer lock-out i.p.v. open laten
     }
 
     if (!stored) { resolve(); return; }
+    if (stored === '__UNREACHABLE__') {
+      // Toon een duidelijke foutmelding i.p.v. de app gewoon open te laten
+      pinMode = 'enter';
+      screen.style.display = 'flex';
+      document.getElementById('pinSub').textContent = 'Kan beveiliging niet controleren — check je internetverbinding';
+      document.getElementById('pinPad') && (document.getElementById('pinPad').style.opacity = '0.4');
+      return; // resolve NIET aanroepen — app blijft op slot
+    }
 
     // Pincode is ingesteld — toon slotscherm en wacht op correcte invoer
     pinMode = 'enter';
