@@ -1826,30 +1826,42 @@ async function deletePinFromSheet() {
   } catch(e) {}
 }
 
-async function checkPinSetup() {
-  const screen = document.getElementById('pinScreen');
-  if (!screen) return;
+let _pinUnlockResolve = null;
 
-  // Check if Sheets is configured
-  const gsRaw = localStorage.getItem('budgetflow_gs');
-  const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
-  if (!gsConf || !gsConf.apiKey) return;
-  if (gsConf) gsConfig = { ...gsConfig, ...gsConf };
+function checkPinSetup() {
+  return new Promise(async (resolve) => {
+    const screen = document.getElementById('pinScreen');
+    if (!screen) { resolve(); return; }
 
-  const stored = await getPinFromSheet();
-  if (!stored) return;
+    // Check if Sheets is configured — geen Sheets, geen PIN-bescherming mogelijk
+    const gsRaw = localStorage.getItem('budgetflow_gs');
+    const gsConf = gsRaw ? JSON.parse(gsRaw) : null;
+    if (!gsConf || !gsConf.apiKey) { resolve(); return; }
+    gsConfig = { ...gsConfig, ...gsConf };
 
-  // Show lock screen
-  pinMode = 'enter';
-  pinBuffer = '';
-  pinAttempts = 0;
-  updatePinUI();
-  screen.style.display = 'flex';
-  document.getElementById('pinForgot').style.display = 'none';
-  document.addEventListener('keydown', onPinKeydown);
+    let stored;
+    try {
+      stored = await getPinFromSheet();
+    } catch(e) {
+      // Sheets niet bereikbaar — uit voorzorg toch blokkeren i.p.v. doorlaten
+      stored = null;
+    }
 
-  // Prevent iOS from focusing any input underneath
-  document.addEventListener('focusin', preventFocusUnderPin);
+    if (!stored) { resolve(); return; }
+
+    // Pincode is ingesteld — toon slotscherm en wacht op correcte invoer
+    pinMode = 'enter';
+    pinBuffer = '';
+    pinAttempts = 0;
+    updatePinUI();
+    screen.style.display = 'flex';
+    document.getElementById('pinForgot').style.display = 'none';
+    document.addEventListener('keydown', onPinKeydown);
+    document.addEventListener('focusin', preventFocusUnderPin);
+
+    // Bewaar de resolve-functie zodat handlePinComplete de wachtende init() kan vrijgeven
+    _pinUnlockResolve = resolve;
+  });
 }
 
 function preventFocusUnderPin() {
@@ -1909,6 +1921,8 @@ async function handlePinComplete() {
       screen.style.transition = 'opacity 0.3s ease';
       screen.style.opacity = '0';
       setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
+      // Geef de wachtende init()-functie vrij zodat de app pas nu gerenderd wordt
+      if (_pinUnlockResolve) { _pinUnlockResolve(); _pinUnlockResolve = null; }
     } else {
       pinAttempts++;
       pinBuffer = '';
@@ -1996,10 +2010,17 @@ async function setupPin() {
 /* ═══════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════ */
-function init(){
+async function init(){
   loadState();
   if(!state.recurring) state.recurring=[];
   document.documentElement.setAttribute('data-theme',state.settings.theme);
+
+  // KRITIEK: app-inhoud blijft verborgen tot de PIN-check is afgerond.
+  // Dit voorkomt dat iemand het dashboard heel even ziet voordat het slotscherm verschijnt.
+  document.body.classList.add('app-locked');
+
+  await checkPinSetup(); // wacht tot dit klaar is — toont evt. het PIN-scherm en blokkeert verder
+
   document.querySelectorAll('.currency-symbol').forEach(el=>el.textContent=state.settings.currency);
   const txDateEl=document.getElementById('txDate');
   if(txDateEl)txDateEl.value=today();
@@ -2010,9 +2031,10 @@ function init(){
   updateCatFilter();
   renderDashboard();
   checkFirstVisit();
-  checkPinSetup();
+
+  document.body.classList.remove('app-locked');
+
   setTimeout(()=>checkBudgetNotifications(), 1500);
-  // Auto-load from Sheets on startup if configured and not first visit
   if(!state.firstVisit && gsConfig.apiKey) {
     setTimeout(()=>syncFromSheets(), 1000);
   }
