@@ -175,9 +175,11 @@ function closeSidebar()   { document.getElementById('sidebar').classList.remove(
 function openModal(id) {
   document.getElementById('modalBackdrop').classList.add('open');
   document.getElementById('modal-'+id).classList.add('open');
-  if (id==='addTransaction') {
+  if (id==='addTransaction' && !editingTxId) {
     document.getElementById('txDate').value = today();
     populateCatSelect('txCat');
+    document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie toevoegen';
+    document.querySelector('#modal-addTransaction .btn-primary').textContent = 'Opslaan';
     setTimeout(()=>document.getElementById('txDesc').focus(), 50);
   }
   if (id==='addBudget') populateCatSelect('budgetCat');
@@ -199,6 +201,9 @@ function openModal(id) {
 function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
   document.querySelectorAll('.modal').forEach(m=>m.classList.remove('open'));
+  editingTxId = null;
+  document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie toevoegen';
+  document.querySelector('#modal-addTransaction .btn-primary').textContent = 'Opslaan';
 }
 
 function populateCatSelect(id) {
@@ -211,6 +216,7 @@ function populateCatSelect(id) {
    TRANSACTION FORM
    ═══════════════════════════════════════════════ */
 let currentTxType = 'income';
+let editingTxId = null;
 
 function setTxType(type) {
   currentTxType = type;
@@ -222,6 +228,32 @@ function setTxType(type) {
   document.getElementById('transferAccountsWrap').style.display = type==='transfer' ? '' : 'none';
 }
 
+function editTx(id) {
+  const tx = state.transactions.find(t => t.id === id);
+  if (!tx) return;
+  editingTxId = id;
+
+  // Pre-fill the form
+  setTxType(tx.type);
+  document.getElementById('txDesc').value = tx.desc;
+  document.getElementById('txAmount').value = tx.amt;
+  document.getElementById('txDate').value = tx.date;
+  document.getElementById('txNote').value = tx.note || '';
+  populateCatSelect('txCat');
+  if (tx.type === 'expense') document.getElementById('txCat').value = tx.cat;
+  if (tx.type === 'transfer') {
+    document.getElementById('txFromAccount').value = tx.fromAccount || '';
+    document.getElementById('txToAccount').value = tx.toAccount || '';
+  }
+
+  document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie bewerken';
+  document.querySelector('#modal-addTransaction .btn-primary').textContent = 'Wijzigingen opslaan';
+
+  document.getElementById('modalBackdrop').classList.add('open');
+  document.getElementById('modal-addTransaction').classList.add('open');
+  setTimeout(()=>document.getElementById('txDesc').focus(), 50);
+}
+
 function saveTx() {
   const desc = document.getElementById('txDesc').value.trim();
   const amt  = parseFloat(document.getElementById('txAmount').value);
@@ -231,10 +263,29 @@ function saveTx() {
   let cat = currentTxType==='income' ? 'Inkomst' : currentTxType==='transfer' ? 'Transfer' : document.getElementById('txCat').value;
   const fromAccount = currentTxType==='transfer' ? document.getElementById('txFromAccount').value.trim() : '';
   const toAccount   = currentTxType==='transfer' ? document.getElementById('txToAccount').value.trim() : '';
-  state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount });
+
+  if (editingTxId) {
+    // Update existing transaction in place
+    const tx = state.transactions.find(t => t.id === editingTxId);
+    if (tx) {
+      tx.type = currentTxType;
+      tx.desc = desc;
+      tx.amt = amt;
+      tx.date = date;
+      tx.note = note;
+      tx.cat = cat;
+      tx.fromAccount = fromAccount;
+      tx.toAccount = toAccount;
+    }
+    showToast('Transactie bijgewerkt', 'success');
+  } else {
+    state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount });
+  }
+
   saveState();
   closeModal();
   renderDashboard();
+  renderTransactions();
   updateCatFilter();
 }
 
@@ -1019,7 +1070,7 @@ function renderDashboard(){
     const col=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':catColor(t.cat);
     const amtCol=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':'var(--red)';
     const sign=t.type==='income'?'+':t.type==='transfer'?'⇄':'−';
-    return `<div class="tx-mini-row">
+    return `<div class="tx-mini-row" onclick="editTx(${t.id})" style="cursor:pointer">
       <span class="tx-mini-dot" style="background:${col}"></span>
       <span class="tx-mini-name">${t.desc}</span>
       <span class="tx-mini-cat">${t.cat}</span>
@@ -1084,7 +1135,7 @@ function renderTransactions(){
     const sign=t.type==='income'?'+':t.type==='transfer'?'⇄':'−';
     const dateStr=new Date(t.date).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'});
     const sub=t.type==='transfer'&&(t.fromAccount||t.toAccount)?`<div style="font-size:11px;color:var(--text3)">${t.fromAccount||'?'} → ${t.toAccount||'?'}</div>`:t.note?`<div style="font-size:11px;color:var(--text3)">${t.note}</div>`:'';
-    return `<tr><td><div style="font-weight:500">${t.desc}</div>${sub}</td><td><span class="tx-cat-badge"><span class="tx-cat-dot" style="background:${col}"></span>${t.cat}</span></td><td class="tx-date-cell">${dateStr}</td><td class="tx-amount-cell"><span class="tx-amount ${amtClass}">${sign}${fmt(t.amt)}</span></td><td class="tx-actions"><button class="tx-del-btn" onclick="deleteTx(${t.id})">×</button></td></tr>`;
+    return `<tr><td><div style="font-weight:500">${t.desc}</div>${sub}</td><td><span class="tx-cat-badge"><span class="tx-cat-dot" style="background:${col}"></span>${t.cat}</span></td><td class="tx-date-cell">${dateStr}</td><td class="tx-amount-cell"><span class="tx-amount ${amtClass}">${sign}${fmt(t.amt)}</span></td><td class="tx-actions"><button class="tx-del-btn" onclick="editTx(${t.id})" title="Bewerken" style="margin-right:2px">✎</button><button class="tx-del-btn" onclick="deleteTx(${t.id})" title="Verwijderen">×</button></td></tr>`;
   }).join('');
   const inc=tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
   const exp=tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
