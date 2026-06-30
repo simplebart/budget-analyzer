@@ -1103,7 +1103,24 @@ function chartColors(){
 function renderCashflowChart(){
   const{grid,text}=chartColors();
   const months=[],incD=[],expD=[],traD=[];
-  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);const prefix=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;months.push(d.toLocaleDateString('nl-NL',{month:'short'}));const tx=state.transactions.filter(t=>t.date.startsWith(prefix));incD.push(Math.round(tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0)));expD.push(Math.round(tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0)));traD.push(Math.round(tx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0)));}
+  const seenPrefixes = new Set(); // voorkomt dat dezelfde maand twee keer als balk verschijnt
+  for(let i=5;i>=0;i--){
+    const d=new Date();
+    d.setDate(1); // KRITIEK: zet eerst op dag 1, zodat setMonth() nooit kan "doorrollen"
+                  // naar de volgende maand wanneer de huidige dag (bv. 29/30/31)
+                  // niet bestaat in een eerdere maand zoals februari.
+    d.setMonth(d.getMonth()-i);
+    const prefix=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+
+    if (seenPrefixes.has(prefix)) continue; // sla duplicaten over i.p.v. data dubbel te tellen
+    seenPrefixes.add(prefix);
+
+    months.push(d.toLocaleDateString('nl-NL',{month:'short'}));
+    const tx=state.transactions.filter(t=>t.date.startsWith(prefix));
+    incD.push(Math.round(tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0)));
+    expD.push(Math.round(tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0)));
+    traD.push(Math.round(tx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0)));
+  }
   const ctx=document.getElementById('cashflowChart').getContext('2d');
   if(charts.cashflow)charts.cashflow.destroy();
   charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(52,212,138,0.75)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,94,108,0.75)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(167,139,250,0.65)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
