@@ -113,6 +113,40 @@ function getCycleRangeFor(refDate) {
   const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
   return { start: cycleStart, end: cycleEnd };
 }
+
+/* ── Centrale helper: bouw de laatste N budgetcycli, nieuwste laatst ──
+   Gebruikt overal waar voorheen kalendermaanden werden opgebouwd
+   (Cashflow-grafiek, Analytics, Categorie-trends, etc). Elke cyclus
+   krijgt zijn eigen 'match'-functie (tijdzone-veilige stringvergelijking,
+   géén Date-objecten, dus geen risico op de eerdere UTC-verschuivingsbug)
+   en een leesbaar label gebaseerd op de startdag van de cyclus. */
+function getLastNCycles(n) {
+  const startDay = getCycleStartDay();
+  const { start: currentCycleStart } = getCurrentCycleRange();
+  const cycles = [];
+
+  for (let i = n - 1; i >= 0; i--) {
+    const cycleStart = new Date(currentCycleStart.getFullYear(), currentCycleStart.getMonth() - i, startDay);
+    const cycleEnd   = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
+    const startStr = dateToStr(cycleStart);
+    const endStr   = dateToStr(cycleEnd);
+
+    const label = startDay === 1
+      ? cycleStart.toLocaleDateString('nl-NL', { month:'short' })
+      : cycleStart.toLocaleDateString('nl-NL', { month:'short' }); // korte label, tooltip toont volledige range
+
+    cycles.push({
+      start: cycleStart,
+      end: cycleEnd,
+      match: t => t.date >= startStr && t.date <= endStr,
+      label,
+      fullLabel: startDay === 1
+        ? cycleStart.toLocaleDateString('nl-NL', { month:'long', year:'numeric' })
+        : `${cycleStart.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} – ${cycleEnd.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}`
+    });
+  }
+  return cycles;
+}
 const catColor = name => (state.categories.find(c=>c.name===name)||{color:'#94a3b8'}).color;
 const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'}).emoji;
 
@@ -530,9 +564,9 @@ function renderSavings() {
   } else {
     grid.innerHTML = accs.map(acc=>{
       const pct = acc.target>0 ? Math.min(100,Math.round((acc.balance/acc.target)*100)) : null;
-      const nowLocal = new Date();
-      const curMonthPrefix = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
-      const monthlyTxs = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date.startsWith(curMonthPrefix));
+      const { start: cStart, end: cEnd } = getCurrentCycleRange();
+      const cStartStr = dateToStr(cStart), cEndStr = dateToStr(cEnd);
+      const monthlyTxs = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date>=cStartStr&&t.date<=cEndStr);
       const monthNet = monthlyTxs.reduce((a,t)=>a+(t.type==='withdrawal'?-t.amt:t.amt),0);
       return `<div class="savings-acc-card" style="border-top:3px solid ${acc.color}">
         <div class="savings-acc-header">
@@ -611,16 +645,16 @@ function renderSavingsChart(accs) {
   if (charts.savings) charts.savings.destroy();
   if (!accs.length) return;
 
-  // Build 6-month running balance per account
-  const months = [];
-  for (let i=5;i>=0;i--) { const d=new Date(); d.setMonth(d.getMonth()-i); months.push({ prefix:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label:d.toLocaleDateString('nl-NL',{month:'short'}) }); }
+  // Bouw saldo-verloop over de laatste 6 budgetcycli i.p.v. kalendermaanden
+  const cycles = getLastNCycles(6);
 
   const { grid, text } = chartColors();
 
-  // Total balance trend (simulated by adding up all deposits - withdrawals up to each month end)
+  // Total balance trend (simulated by adding up all deposits - withdrawals up to each cycle end)
   const datasets = accs.map(acc=>{
-    const data = months.map(m=>{
-      const txsUpTo = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date<=m.prefix+'-31');
+    const data = cycles.map(c=>{
+      const endStr = dateToStr(c.end);
+      const txsUpTo = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date<=endStr);
       const bal = txsUpTo.reduce((sum,t)=>sum+(t.type==='withdrawal'?-t.amt:t.amt),0);
       return Math.round(bal*100)/100;
     });
@@ -629,7 +663,7 @@ function renderSavingsChart(accs) {
 
   charts.savings = new Chart(ctx.getContext('2d'),{
     type:'line',
-    data:{ labels:months.map(m=>m.label), datasets },
+    data:{ labels:cycles.map(c=>c.label), datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:accs.length>1, labels:{ color:text, font:{size:11}, boxWidth:10 } }, tooltip:{ callbacks:{ label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL') }}},
@@ -1111,28 +1145,15 @@ function chartColors(){
 
 function renderCashflowChart(){
   const{grid,text}=chartColors();
-  const months=[],incD=[],expD=[],traD=[];
-  const seenPrefixes = new Set(); // voorkomt dat dezelfde maand twee keer als balk verschijnt
-  for(let i=5;i>=0;i--){
-    const d=new Date();
-    d.setDate(1); // KRITIEK: zet eerst op dag 1, zodat setMonth() nooit kan "doorrollen"
-                  // naar de volgende maand wanneer de huidige dag (bv. 29/30/31)
-                  // niet bestaat in een eerdere maand zoals februari.
-    d.setMonth(d.getMonth()-i);
-    const prefix=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const cycles = getLastNCycles(6); // 6 budgetcycli i.p.v. kalendermaanden — volgt de instelling onder Instellingen
+  const months = cycles.map(c => c.label);
+  const incD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='income'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const expD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='expense'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const traD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='transfer'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
 
-    if (seenPrefixes.has(prefix)) continue; // sla duplicaten over i.p.v. data dubbel te tellen
-    seenPrefixes.add(prefix);
-
-    months.push(d.toLocaleDateString('nl-NL',{month:'short'}));
-    const tx=state.transactions.filter(t=>t.date.startsWith(prefix));
-    incD.push(Math.round(tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0)));
-    expD.push(Math.round(tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0)));
-    traD.push(Math.round(tx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0)));
-  }
   const ctx=document.getElementById('cashflowChart').getContext('2d');
   if(charts.cashflow)charts.cashflow.destroy();
-  charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(52,212,138,0.75)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,94,108,0.75)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(167,139,250,0.65)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(52,212,138,0.75)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,94,108,0.75)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(167,139,250,0.65)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>cycles[items[0].dataIndex].fullLabel,label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
   document.getElementById('cashflowLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'},{label:'Transfers',color:'#a78bfa'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
 }
 
@@ -1211,15 +1232,8 @@ function renderAnalytics(){
       });
     }
   } else {
-    // Jaar: toon elke maand van de laatste 12 maanden
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(); d.setMonth(d.getMonth() - i);
-      const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      periods.push({
-        match: t => t.date.startsWith(prefix),
-        label: d.toLocaleDateString('nl-NL', { month:'short' })
-      });
-    }
+    // Jaar: toon de laatste 12 budgetcycli i.p.v. kalendermaanden
+    periods = getLastNCycles(12);
   }
 
   const labels = periods.map(p => p.label);
@@ -1757,20 +1771,19 @@ function getMonthTx(monthPrefix) {
 function renderMonthComparison() {
   const el = document.getElementById('monthCompare');
   if (!el) return;
-  const now = new Date();
-  const thisPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const prev = new Date(now); prev.setMonth(prev.getMonth()-1);
-  const prevPrefix = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
 
-  const thisExp  = getMonthTx(thisPrefix).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const prevExp  = getMonthTx(prevPrefix).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const thisInc  = getMonthTx(thisPrefix).filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-  const prevInc  = getMonthTx(prevPrefix).filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+  const cycles = getLastNCycles(2); // [vorige cyclus, huidige cyclus]
+  const [prevCycle, thisCycle] = cycles;
+
+  const thisExp  = state.transactions.filter(t=>t.type==='expense'&&thisCycle.match(t)).reduce((a,t)=>a+t.amt,0);
+  const prevExp  = state.transactions.filter(t=>t.type==='expense'&&prevCycle.match(t)).reduce((a,t)=>a+t.amt,0);
+  const thisInc  = state.transactions.filter(t=>t.type==='income'&&thisCycle.match(t)).reduce((a,t)=>a+t.amt,0);
+  const prevInc  = state.transactions.filter(t=>t.type==='income'&&prevCycle.match(t)).reduce((a,t)=>a+t.amt,0);
 
   const expDiff = thisExp - prevExp;
   const incDiff = thisInc - prevInc;
-  const prevName = prev.toLocaleDateString('nl-NL',{month:'long'});
-  const thisName = now.toLocaleDateString('nl-NL',{month:'long'});
+  const prevName = prevCycle.label;
+  const thisName = thisCycle.label;
 
   el.innerHTML = `
     <div class="compare-row">
