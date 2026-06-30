@@ -23,7 +23,7 @@ let state = {
     { name:'Sparen',         emoji:'💰', color:'#4ade80', deletable:false },
     { name:'Overig',         emoji:'📦', color:'#94a3b8', deletable:false },
   ],
-  settings: { currency:'€', theme:'dark', monthlyIncome:0 },
+  settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1 },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
   lastRecurringMonth: '',  // 'YYYY-MM' of last applied month
   firstVisit: true,
@@ -51,6 +51,61 @@ const today = () => new Date().toISOString().split('T')[0];
 const getDayOfMonth = () => new Date().getDate();
 const getDaysInMonth = () => new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
 const monthName = d => d.toLocaleDateString('nl-NL', { month:'long', year:'numeric' });
+
+/* ── Budgetcyclus: aangepaste periode i.p.v. kalendermaand ──
+   cycleStartDay = 1 betekent gewone kalendermaand.
+   cycleStartDay = 25 betekent: periode loopt van de 25e t/m de 24e volgende maand. */
+function getCycleStartDay() { return state.settings.cycleStartDay || 1; }
+
+function getCurrentCycleRange() {
+  const startDay = getCycleStartDay();
+  const now = new Date();
+  let cycleStart;
+  if (now.getDate() >= startDay) {
+    cycleStart = new Date(now.getFullYear(), now.getMonth(), startDay);
+  } else {
+    cycleStart = new Date(now.getFullYear(), now.getMonth() - 1, startDay);
+  }
+  const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
+  return { start: cycleStart, end: cycleEnd };
+}
+
+function dateToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function getCycleDayProgress() {
+  const { start } = getCurrentCycleRange();
+  const now = new Date();
+  const diffMs = now - start;
+  return Math.floor(diffMs / (1000*60*60*24)) + 1; // day 1 = start day
+}
+
+function getCycleTotalDays() {
+  const { start, end } = getCurrentCycleRange();
+  const diffMs = end - start;
+  return Math.round(diffMs / (1000*60*60*24)) + 1;
+}
+
+function cycleLabel() {
+  const startDay = getCycleStartDay();
+  const { start, end } = getCurrentCycleRange();
+  if (startDay === 1) return monthName(start);
+  const fmt = (d) => d.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
+function getCycleRangeFor(refDate) {
+  const startDay = getCycleStartDay();
+  let cycleStart;
+  if (refDate.getDate() >= startDay) {
+    cycleStart = new Date(refDate.getFullYear(), refDate.getMonth(), startDay);
+  } else {
+    cycleStart = new Date(refDate.getFullYear(), refDate.getMonth() - 1, startDay);
+  }
+  const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
+  return { start: cycleStart, end: cycleEnd };
+}
 const catColor = name => (state.categories.find(c=>c.name===name)||{color:'#94a3b8'}).color;
 const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'}).emoji;
 
@@ -803,6 +858,18 @@ function setTheme(theme) {
 }
 function setCurrency(sym) { state.settings.currency=sym; document.querySelectorAll('.currency-symbol').forEach(el=>el.textContent=sym); saveState(); renderDashboard(); }
 function saveIncome() { const v=parseFloat(document.getElementById('incomeInput').value); if(v>0){state.settings.monthlyIncome=v;saveState();renderDashboard();} }
+
+function saveCycleStart() {
+  const v = parseInt(document.getElementById('cycleStartInput').value);
+  if (v >= 1 && v <= 28) {
+    state.settings.cycleStartDay = v;
+    saveState();
+    renderDashboard();
+    showToast(`Budgetcyclus ingesteld: start op dag ${v}`, 'success');
+  } else {
+    showToast('Kies een dag tussen 1 en 28', 'warn');
+  }
+}
 function exportCSV() {
   const rows=[['Datum','Omschrijving','Categorie','Type','Bedrag','Van','Naar','Notitie']];
   [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>rows.push([t.date,t.desc,t.cat,t.type,t.amt.toFixed(2),t.fromAccount||'',t.toAccount||'',t.note||'']));
@@ -866,8 +933,10 @@ function loadDemoData() {
    COMPUTE METRICS
    ═══════════════════════════════════════════════ */
 function getCurrentMonthTx() {
-  const prefix=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
-  return state.transactions.filter(t=>t.date.startsWith(prefix));
+  const { start, end } = getCurrentCycleRange();
+  const startStr = dateToStr(start);
+  const endStr = dateToStr(end);
+  return state.transactions.filter(t => t.date >= startStr && t.date <= endStr);
 }
 
 function computeMetrics() {
@@ -878,8 +947,10 @@ function computeMetrics() {
   const balance =income-expense;
   const cats={};
   tx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  const burnDaily=getDayOfMonth()>0?expense/getDayOfMonth():0;
-  const projected=burnDaily*getDaysInMonth();
+  const dayProgress = Math.max(1, getCycleDayProgress());
+  const totalDays = getCycleTotalDays();
+  const burnDaily = expense / dayProgress;
+  const projected = burnDaily * totalDays;
   let score=0; const breakdown=[];
   if(income>0){
     const sr=balance/income;
@@ -900,8 +971,8 @@ function computeMetrics() {
 function renderDashboard(){
   const now=new Date();
   const userName = state.settings.userName||'';
-  document.getElementById('dashSub').textContent = (userName ? userName + ' · ' : '') + monthName(now);
-  document.getElementById('sidebarMonth').textContent=monthName(now);
+  document.getElementById('dashSub').textContent = (userName ? userName + ' · ' : '') + cycleLabel();
+  document.getElementById('sidebarMonth').textContent=cycleLabel();
   const{income,expense,transfer,balance,cats,burnDaily,projected,score,breakdown}=computeMetrics();
   const transCount=getCurrentMonthTx().filter(t=>t.type==='transfer').length;
 
@@ -945,9 +1016,9 @@ function renderDashboard(){
   document.getElementById('burnDaily').textContent=fmt(burnDaily);
   document.getElementById('burnWeekly').textContent=fmt(burnDaily*7);
   document.getElementById('burnProjected').textContent=fmt(projected);
-  const day=getDayOfMonth(),dim=getDaysInMonth();
+  const cycleDay=Math.max(1,getCycleDayProgress()), cycleDays=getCycleTotalDays();
   document.getElementById('projFill').style.width=income>0?Math.min(100,Math.round((projected/income)*100))+'%':'0%';
-  document.getElementById('projMarker').style.left=Math.round((day/dim)*100)+'%';
+  document.getElementById('projMarker').style.left=Math.min(100,Math.round((cycleDay/cycleDays)*100))+'%';
   document.getElementById('projCurrent').textContent=fmt(expense);
   document.getElementById('projEnd').textContent=fmt(projected);
   document.getElementById('txPageSub').textContent=state.transactions.length+' transacties in totaal';
@@ -1101,6 +1172,7 @@ function renderSettings(){
   document.getElementById('themeDark').classList.toggle('active',state.settings.theme==='dark');
   document.getElementById('currencySelect').value=state.settings.currency;
   if(state.settings.monthlyIncome)document.getElementById('incomeInput').value=state.settings.monthlyIncome;
+  document.getElementById('cycleStartInput').value=state.settings.cycleStartDay||1;
   renderCatManageList();
   renderSyncSettings();
 }
