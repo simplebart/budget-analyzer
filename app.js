@@ -1483,6 +1483,21 @@ async function syncToSheets() {
 /* ══════════════════════════════════════════
    DOWNLOAD ← SHEETS
    ══════════════════════════════════════════ */
+/* ── Debug helper: roep dit aan vanuit de browser console (F12) ──
+   debugMonth('2026-05') toont exact welke transacties de app telt voor die maand,
+   inclusief het 'type' veld, zodat verkeerd ingelezen rijen zichtbaar worden. */
+function debugMonth(prefix) {
+  const tx = state.transactions.filter(t => t.date.startsWith(prefix));
+  console.log(`=== ${prefix}: ${tx.length} transacties ===`);
+  let totalExpense = 0;
+  tx.forEach(t => {
+    if (t.type === 'expense') totalExpense += t.amt;
+    console.log(`${t.date} | type="${t.type}" | ${t.desc} | €${t.amt}`);
+  });
+  console.log(`--- Totaal uitgaven (type==='expense'): €${totalExpense.toFixed(2)} ---`);
+  return tx;
+}
+
 async function syncFromSheets() {
   if (syncInProgress) return;
   syncInProgress = true;
