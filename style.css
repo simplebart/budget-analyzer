@@ -2295,3 +2295,19 @@ body {
 }
 
 .pin-dots.shake { animation: pinShake 0.4s ease; }
+
+/* ═══════════════════════════════════════════════
+   APP LOCK — voorkomt dat content zichtbaar is
+   voordat de PIN-check is afgerond
+   ═══════════════════════════════════════════════ */
+body.app-locked .sidebar,
+body.app-locked .topbar,
+body.app-locked .main,
+body.app-locked .bottom-nav {
+  visibility: hidden;
+}
+
+/* Het pin-screen zelf moet altijd zichtbaar blijven, ook als de body locked is */
+body.app-locked .pin-screen {
+  visibility: visible;
+}
