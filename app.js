@@ -131,9 +131,10 @@ function getLastNCycles(n) {
     const startStr = dateToStr(cycleStart);
     const endStr   = dateToStr(cycleEnd);
 
-    const label = startDay === 1
-      ? cycleStart.toLocaleDateString('nl-NL', { month:'short' })
-      : cycleStart.toLocaleDateString('nl-NL', { month:'short' }); // korte label, tooltip toont volledige range
+    // Label toont de maand waar de cyclus het MEEST in valt (gebaseerd op het einde),
+    // niet de maand waarin hij toevallig begint. Een cyclus van 25 april t/m 24 mei
+    // bevat 6 dagen april en 24 dagen mei, en hoort dus "mei" te heten — niet "apr".
+    const label = cycleEnd.toLocaleDateString('nl-NL', { month:'short' });
 
     cycles.push({
       start: cycleStart,
@@ -991,52 +992,6 @@ function clearAllData() {
   state.transactions=[]; state.budgets={}; state.goals=[]; state.savings={accounts:[],transactions:[]};
   saveState(); navigate('dashboard');
 }
-function loadDemoData() {
-  const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
-  const pm=String(now.getMonth()||12).padStart(2,'0'), py=now.getMonth()===0?y-1:y;
-  state.transactions=[
-    {id:1, type:'income',  desc:'Salaris',           amt:2850,date:`${y}-${m}-01`,cat:'Inkomst',      note:'',fromAccount:'',toAccount:''},
-    {id:2, type:'income',  desc:'Freelance project', amt:450, date:`${y}-${m}-05`,cat:'Inkomst',      note:'Webdesign',fromAccount:'',toAccount:''},
-    {id:3, type:'expense', desc:'Huur',               amt:950, date:`${y}-${m}-01`,cat:'Wonen',        note:'',fromAccount:'',toAccount:''},
-    {id:4, type:'expense', desc:'Albert Heijn',       amt:94,  date:`${y}-${m}-03`,cat:'Boodschappen', note:'',fromAccount:'',toAccount:''},
-    {id:5, type:'expense', desc:'NS Maandkaart',      amt:110, date:`${y}-${m}-01`,cat:'Transport',    note:'',fromAccount:'',toAccount:''},
-    {id:6, type:'expense', desc:'Netflix',            amt:13,  date:`${y}-${m}-02`,cat:'Abonnementen', note:'',fromAccount:'',toAccount:''},
-    {id:7, type:'expense', desc:'Spotify',            amt:10,  date:`${y}-${m}-02`,cat:'Abonnementen', note:'',fromAccount:'',toAccount:''},
-    {id:8, type:'expense', desc:'Gym abonnement',     amt:35,  date:`${y}-${m}-01`,cat:'Gezondheid',   note:'',fromAccount:'',toAccount:''},
-    {id:9, type:'expense', desc:'Restaurant',         amt:67,  date:`${y}-${m}-08`,cat:'Eten & Drinken',note:'Diner',fromAccount:'',toAccount:''},
-    {id:10,type:'expense', desc:'Jumbo',              amt:78,  date:`${y}-${m}-10`,cat:'Boodschappen', note:'',fromAccount:'',toAccount:''},
-    {id:11,type:'expense', desc:'Energie rekening',   amt:85,  date:`${y}-${m}-04`,cat:'Wonen',        note:'',fromAccount:'',toAccount:''},
-    {id:12,type:'expense', desc:'Kleding',            amt:89,  date:`${y}-${m}-14`,cat:'Kleding',      note:'',fromAccount:'',toAccount:''},
-    {id:13,type:'transfer',desc:'Naar spaarrekening', amt:300, date:`${y}-${m}-01`,cat:'Transfer',     note:'Maandelijks',fromAccount:'Betaalrekening',toAccount:'Spaarrekening'},
-    {id:14,type:'income',  desc:'Salaris',            amt:2850,date:`${py}-${pm}-01`,cat:'Inkomst',    note:'',fromAccount:'',toAccount:''},
-    {id:15,type:'expense', desc:'Huur',               amt:950, date:`${py}-${pm}-01`,cat:'Wonen',      note:'',fromAccount:'',toAccount:''},
-    {id:16,type:'expense', desc:'Boodschappen',       amt:155, date:`${py}-${pm}-05`,cat:'Boodschappen',note:'',fromAccount:'',toAccount:''},
-    {id:17,type:'transfer',desc:'Sparen',             amt:250, date:`${py}-${pm}-01`,cat:'Transfer',   note:'',fromAccount:'Betaalrekening',toAccount:'Spaarrekening'},
-  ];
-  state.savings = {
-    accounts:[
-      {id:101,name:'Noodfonds',      balance:4250, target:5000, color:'#34d48a', note:'6 maanden kosten'},
-      {id:102,name:'Vakantie Japan', balance:1800, target:3000, color:'#6c8aff', note:'Gepland zomer 2027'},
-      {id:103,name:'Vrij sparen',    balance:620,  target:0,    color:'#ffb340', note:''},
-    ],
-    transactions:[
-      {id:201,accountId:101,type:'deposit',   amt:300,date:`${y}-${m}-01`,  desc:'Maandelijkse storting'},
-      {id:202,accountId:102,type:'deposit',   amt:200,date:`${y}-${m}-01`,  desc:'Vakantie sparen'},
-      {id:203,accountId:103,type:'deposit',   amt:100,date:`${y}-${m}-01`,  desc:'Overig'},
-      {id:204,accountId:101,type:'interest',  amt:3.5,date:`${y}-${m}-01`,  desc:'Rente'},
-      {id:205,accountId:101,type:'deposit',   amt:300,date:`${py}-${pm}-01`,desc:'Maandelijkse storting'},
-      {id:206,accountId:102,type:'deposit',   amt:200,date:`${py}-${pm}-01`,desc:'Vakantie sparen'},
-    ]
-  };
-  state.budgets={'Wonen':1100,'Boodschappen':200,'Transport':130,'Eten & Drinken':150,'Vrije tijd':100,'Abonnementen':80,'Gezondheid':100};
-  state.goals=[
-    {id:1,name:'Vakantie Japan',target:3000,saved:1200,date:`${y+1}-06-01`,color:'#6c8aff'},
-    {id:2,name:'Noodfonds',     target:5000,saved:2750,date:`${y+1}-12-31`,color:'#34d48a'},
-    {id:3,name:'Nieuwe laptop', target:1500,saved:600, date:`${y}-10-01`,  color:'#ffb340'},
-  ];
-  saveState(); navigate('dashboard');
-}
-
 /* ═══════════════════════════════════════════════
    COMPUTE METRICS
    ═══════════════════════════════════════════════ */
@@ -1519,6 +1474,24 @@ function debugMonth(prefix) {
   });
   console.log(`--- Totaal uitgaven (type==='expense'): €${totalExpense.toFixed(2)} ---`);
   return tx;
+}
+
+/* ── Debug helper voor cycli: toont EXACT dezelfde balken als de Cashflow-grafiek ──
+   Roep aan via de console: debugCycles()
+   Toont per balk de exacte start/eind-datum, het label, en alle transacties
+   die daar volgens de huidige code in vallen. */
+function debugCycles() {
+  const cycles = getLastNCycles(6);
+  cycles.forEach((c, idx) => {
+    const startStr = dateToStr(c.start);
+    const endStr = dateToStr(c.end);
+    const tx = state.transactions.filter(t => c.match(t));
+    const exp = tx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
+    console.log(`%c[${idx}] ${c.label} (${startStr} t/m ${endStr}) — ${tx.length} tx — uitgaven: €${exp.toFixed(2)}`, 'font-weight:bold;color:#6c8aff');
+    tx.filter(t => t.type === 'expense').forEach(t => {
+      console.log(`   ${t.date} | ${t.desc} | €${t.amt}`);
+    });
+  });
 }
 
 async function syncFromSheets() {
