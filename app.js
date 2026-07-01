@@ -197,6 +197,15 @@ function navigate(page) {
   document.getElementById('page-'+page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(el=>el.classList.add('active'));
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page]||page;
+  // Show/hide topbar action button based on page
+  const actionBtn = document.getElementById('topbarAction');
+  if (actionBtn) {
+    const showAction = ['dashboard','transactions'].includes(page);
+    actionBtn.style.display = showAction ? '' : 'none';
+    actionBtn.onclick = page === 'transactions'
+      ? () => openModal('addTransaction')
+      : () => openModal('addTransaction');
+  }
   if (window.innerWidth <= 900) closeSidebar();
   if (page==='dashboard')    renderDashboard();
   if (page==='transactions') { resetTxFilters(); renderTransactions(); }
