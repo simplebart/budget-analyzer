@@ -257,24 +257,58 @@
           <button class="pill" onclick="setPeriod('year',this)">Jaar</button>
         </div>
       </div>
+
+      <!-- VERHAAL — wat gebeurt er met je geld? -->
+      <div class="card money-story-card" id="moneyStoryCard">
+        <div class="money-story-header">
+          <span class="money-story-icon">💬</span>
+          <span class="card-title">Wat gebeurt er met je geld?</span>
+        </div>
+        <div id="moneyStory" class="money-story-text"></div>
+        <div class="money-flow-bars" id="moneyFlowBars"></div>
+      </div>
+
+      <!-- CATEGORIE VERDELING — waar gaat het naartoe -->
+      <div class="analytics-grid" style="margin-bottom:14px">
+        <div class="card analytics-card-wide">
+          <div class="card-header">
+            <span class="card-title">Waar gaat je geld naartoe?</span>
+            <span class="card-sub" id="catBreakdownSub"></span>
+          </div>
+          <div id="catBreakdownList" class="cat-breakdown-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Vaste vs variabele lasten</span></div>
+          <div class="chart-wrap" style="height:200px"><canvas id="fixedVarChart"></canvas></div>
+          <div id="fixedVarLegend" style="margin-top:10px"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Deze cyclus vs vorige</span></div>
+          <div id="cycleCompareList" class="cat-breakdown-list"></div>
+        </div>
+      </div>
+
+      <!-- TRENDS -->
       <div class="analytics-grid">
         <div class="card analytics-card-wide">
           <div class="card-header"><span class="card-title">Inkomsten vs Uitgaven</span><div id="incExpLegend" class="chart-legend"></div></div>
-          <div class="chart-wrap" style="height:240px"><canvas id="incExpChart" aria-label="Inkomsten versus uitgaven over tijd"></canvas></div>
+          <div class="chart-wrap" style="height:220px"><canvas id="incExpChart"></canvas></div>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Categorie trend</span></div>
-          <div class="chart-wrap" style="height:220px"><canvas id="catTrendChart" aria-label="Uitgaven per categorie trend"></canvas></div>
+          <div class="chart-wrap" style="height:200px"><canvas id="catTrendChart"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Spaarquote</span></div>
-          <div class="chart-wrap" style="height:220px"><canvas id="savingsRateChart" aria-label="Maandelijkse spaarquote"></canvas></div>
+          <div class="card-header"><span class="card-title">Spaarquote per cyclus</span></div>
+          <div class="chart-wrap" style="height:200px"><canvas id="savingsRateChart"></canvas></div>
         </div>
         <div class="card analytics-card-wide">
           <div class="card-header"><span class="card-title">Uitgavenpatroon per weekdag</span></div>
-          <div class="chart-wrap" style="height:200px"><canvas id="weekdayChart" aria-label="Gemiddelde uitgaven per dag van de week"></canvas></div>
+          <div class="chart-wrap" style="height:180px"><canvas id="weekdayChart"></canvas></div>
         </div>
       </div>
+
+      <!-- INZICHTEN -->
       <div class="card insights-card">
         <div class="card-header"><span class="card-title">Automatische inzichten</span></div>
         <div class="insights-grid" id="insightsGrid"></div>
@@ -927,6 +961,34 @@
       <p class="pin-forgot" id="pinForgot" style="display:none">
         <button onclick="pinReset()">Pincode vergeten?</button>
       </p>
+    </div>
+  </div>
+
+  <!-- EDIT CATEGORY MODAL -->
+  <div class="modal" id="modal-editCategory">
+    <div class="modal-header">
+      <h2 class="modal-title">Categorie bewerken</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Naam</label>
+        <input class="form-input" type="text" id="editCatName" placeholder="Categorie naam..." />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Emoji</label>
+          <input class="form-input" type="text" id="editCatEmoji" placeholder="🏷" maxlength="2" style="text-align:center;font-size:20px" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kleur</label>
+          <input type="color" id="editCatColor" style="width:100%;height:40px;border:1px solid var(--border-strong);border-radius:var(--radius);cursor:pointer;padding:3px;background:var(--bg3)" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
+      <button class="btn-primary" onclick="saveEditCategory()">Opslaan</button>
     </div>
   </div>
 
