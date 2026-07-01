@@ -279,7 +279,26 @@ function editTx(id) {
   setTxType(tx.type);
   document.getElementById('txDesc').value = tx.desc;
   document.getElementById('txAmount').value = tx.amt;
-  document.getElementById('txDate').value = tx.date;
+  // Zorg dat de datum altijd in YYYY-MM-DD formaat staat voor het datumveld
+  // tx.date kan opgeslagen zijn als "2026-05-28" of als timestamp "2026-05-28T22:00:00.000Z"
+  let txDateStr = tx.date || '';
+  if (txDateStr.includes('T')) {
+    // ISO timestamp — haal lokale datum eruit zonder tijdzone-verschuiving
+    const d = new Date(txDateStr);
+    txDateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  // Als het nog steeds geen YYYY-MM-DD is, probeer te parsen
+  if (txDateStr && !/^\d{4}-\d{2}-\d{2}$/.test(txDateStr)) {
+    const parsed = new Date(txDateStr);
+    if (!isNaN(parsed)) {
+      txDateStr = `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
+    } else {
+      txDateStr = today(); // fallback naar vandaag als datum onparseerbaar is
+    }
+  }
+  document.getElementById('txDate').value = txDateStr;
+  // Repareer ook de opgeslagen datum als die een tijdstempel bevat
+  if (tx.date && tx.date.includes('T')) { tx.date = txDateStr; }
   document.getElementById('txNote').value = tx.note || '';
   populateCatSelect('txCat');
   if (tx.type === 'expense') document.getElementById('txCat').value = tx.cat;
@@ -374,8 +393,54 @@ function renderCatManageList() {
       <span class="cat-manage-dot" style="background:${c.color}"></span>
       <span class="cat-manage-emoji">${c.emoji}</span>
       <span class="cat-manage-name">${c.name}</span>
+      <button class="cat-manage-edit" onclick="openEditCategory('${c.name}')" title="Bewerken">✎</button>
       <button class="cat-manage-del" onclick="deleteCategory('${c.name}')" ${!c.deletable?'disabled title="Standaard"':''}>×</button>
     </div>`).join('');
+}
+
+let editingCatName = null;
+
+function openEditCategory(name) {
+  const cat = state.categories.find(c => c.name === name);
+  if (!cat) return;
+  editingCatName = name;
+  document.getElementById('editCatName').value = cat.name;
+  document.getElementById('editCatEmoji').value = cat.emoji;
+  document.getElementById('editCatColor').value = cat.color;
+  document.getElementById('modalBackdrop').classList.add('open');
+  document.getElementById('modal-editCategory').classList.add('open');
+  setTimeout(() => document.getElementById('editCatName').focus(), 50);
+}
+
+function saveEditCategory() {
+  const cat = state.categories.find(c => c.name === editingCatName);
+  if (!cat) return;
+  const newName  = document.getElementById('editCatName').value.trim();
+  const newEmoji = document.getElementById('editCatEmoji').value.trim() || cat.emoji;
+  const newColor = document.getElementById('editCatColor').value;
+  if (!newName) return;
+
+  // If name changed, update all transactions that use the old name
+  if (newName !== editingCatName) {
+    if (state.categories.find(c => c.name.toLowerCase() === newName.toLowerCase() && c.name !== editingCatName)) {
+      alert('Die naam bestaat al.'); return;
+    }
+    state.transactions.forEach(t => { if (t.cat === editingCatName) t.cat = newName; });
+    state.budgets[newName] = state.budgets[editingCatName];
+    delete state.budgets[editingCatName];
+  }
+
+  cat.name  = newName;
+  cat.emoji = newEmoji;
+  cat.color = newColor;
+
+  saveState();
+  closeModal();
+  renderCatManageList();
+  populateCatSelect('txCat');
+  populateCatSelect('budgetCat');
+  updateCatFilter();
+  renderDashboard();
 }
 
 /* ═══════════════════════════════════════════════
@@ -2012,9 +2077,38 @@ async function setupPin() {
 /* ═══════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════ */
+function repairTimestampDates() {
+  let repaired = 0;
+  state.transactions.forEach(t => {
+    if (t.date && t.date.includes('T')) {
+      // Gebruik UTC-datum uit de string direct (voor 22:00 UTC = 00:00 lokaal +2 uur, dus +1 dag)
+      const parts = t.date.split('T')[0];
+      // Maar controleer: als de tijd 22:00 of 23:00 is, was het door tijdzone-shift een dag te vroeg
+      const timeMatch = t.date.match(/T(\d{2}):/);
+      const hour = timeMatch ? parseInt(timeMatch[1]) : 0;
+      if (hour >= 22) {
+        // Was lokaal al de volgende dag — schuif een dag op
+        const d = new Date(parts + 'T12:00:00Z'); // gebruik 12:00 UTC om veilig te zijn
+        d.setDate(d.getDate() + 1);
+        t.date = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      } else {
+        t.date = parts;
+      }
+      repaired++;
+    }
+  });
+  if (repaired > 0) {
+    console.log(`Gerepareerd: ${repaired} transacties met timestamp-datum omgezet naar lokale datum`);
+    saveState(true); // sla op zonder autoSync te triggeren
+  }
+}
+
 async function init(){
   loadState();
   if(!state.recurring) state.recurring=[];
+  // Repareer eventuele datums die als ISO timestamp zijn opgeslagen (met T en tijdzone)
+  // Dit was veroorzaakt door de toISOString()-bug die inmiddels is opgelost
+  repairTimestampDates();
   document.documentElement.setAttribute('data-theme',state.settings.theme);
 
   // KRITIEK: app-inhoud blijft verborgen tot de PIN-check is afgerond.
