@@ -1219,70 +1219,266 @@ function renderAnalytics(){
   if (subEl) {
     if (state.analyticsPeriod === 'month')   subEl.textContent = `Per dag — ${cycleLabel()}`;
     if (state.analyticsPeriod === 'quarter') subEl.textContent = 'Per week — laatste 13 weken';
-    if (state.analyticsPeriod === 'year')    subEl.textContent = 'Per maand — laatste 12 maanden';
+    if (state.analyticsPeriod === 'year')    subEl.textContent = 'Per cyclus — laatste 12 cycli';
   }
 
-  /* ── Bouw periode-buckets afhankelijk van de gekozen modus ── */
+  // ── Bouw periode-buckets ──
   let periods = [];
-  const today = new Date();
-
+  const todayDate = new Date();
   if (state.analyticsPeriod === 'month') {
-    // Toon elke dag van de huidige budgetcyclus
     const { start, end } = getCurrentCycleRange();
     let cursor = new Date(start);
     while (cursor <= end) {
-      const dayStr = dateToStr(cursor); // bevries de waarde per iteratie — geen closure-bug
-      periods.push({
-        match: t => t.date === dayStr,
-        label: cursor.getDate().toString()
-      });
+      const dayStr = dateToStr(cursor);
+      periods.push({ match: t => t.date === dayStr, label: cursor.getDate().toString() });
       cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
     }
   } else if (state.analyticsPeriod === 'quarter') {
-    // Toon elke week van de laatste 13 weken (~kwartaal)
     for (let i = 12; i >= 0; i--) {
-      const weekEnd = new Date(today);
-      weekEnd.setDate(weekEnd.getDate() - (i * 7));
-      const weekStart = new Date(weekEnd);
-      weekStart.setDate(weekStart.getDate() - 6);
+      const weekEnd = new Date(todayDate); weekEnd.setDate(weekEnd.getDate() - (i * 7));
+      const weekStart = new Date(weekEnd); weekStart.setDate(weekStart.getDate() - 6);
       const ws = dateToStr(weekStart), we = dateToStr(weekEnd);
-      periods.push({
-        match: t => t.date >= ws && t.date <= we,
-        label: weekStart.toLocaleDateString('nl-NL', { day:'numeric', month:'short' })
-      });
+      periods.push({ match: t => t.date >= ws && t.date <= we, label: weekStart.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) });
     }
   } else {
-    // Jaar: toon de laatste 12 budgetcycli i.p.v. kalendermaanden
     periods = getLastNCycles(12);
   }
 
-  const labels = periods.map(p => p.label);
-  const incArr = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const expArr = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const labels  = periods.map(p => p.label);
+  const incArr  = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const expArr  = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const maxTicks = state.analyticsPeriod==='month' ? 15 : 13;
+  const ptRadius = state.analyticsPeriod==='month' ? 2 : 4;
 
+  // ── Verhaal: wat gebeurt er met je geld? ──
+  renderMoneyStory();
+
+  // ── Categorie verdeling ──
+  renderCatBreakdown();
+
+  // ── Vaste vs variabele lasten ──
+  renderFixedVarChart(grid, text);
+
+  // ── Cyclus vergelijking ──
+  renderCycleCompare();
+
+  // ── Inkomsten vs Uitgaven chart ──
   const ctx1=document.getElementById('incExpChart').getContext('2d');
   if(charts.incExp)charts.incExp.destroy();
-  charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[{label:'Inkomsten',data:incArr,borderColor:'#34d48a',backgroundColor:'rgba(52,212,138,0.08)',tension:0.4,fill:true,pointRadius:state.analyticsPeriod==='month'?2:4,pointBackgroundColor:'#34d48a'},{label:'Uitgaven',data:expArr,borderColor:'#ff5e6c',backgroundColor:'rgba(255,94,108,0.08)',tension:0.4,fill:true,pointRadius:state.analyticsPeriod==='month'?2:4,pointBackgroundColor:'#ff5e6c'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:state.analyticsPeriod==='month'?15:13}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[
+    {label:'Inkomsten',data:incArr,borderColor:'#34d48a',backgroundColor:'rgba(52,212,138,0.08)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#34d48a'},
+    {label:'Uitgaven', data:expArr,borderColor:'#ff5e6c',backgroundColor:'rgba(255,94,108,0.08)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#ff5e6c'}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
   document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
 
+  // ── Categorie trend ──
   const topCats=Object.entries(state.transactions.filter(t=>t.type==='expense').reduce((a,t)=>{a[t.cat]=(a[t.cat]||0)+t.amt;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
   const ctx2=document.getElementById('catTrendChart').getContext('2d');
   if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:state.analyticsPeriod==='month'?2:3}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:state.analyticsPeriod==='month'?15:13}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:ptRadius}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
+  // ── Spaarquote ──
   const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
   const ctx3=document.getElementById('savingsRateChart').getContext('2d');
   if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(52,212,138,0.75)':v>=0?'rgba(255,179,64,0.75)':'rgba(255,94,108,0.75)'),borderRadius:state.analyticsPeriod==='month'?2:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:state.analyticsPeriod==='month'?15:13}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(52,212,138,0.75)':v>=0?'rgba(255,179,64,0.75)':'rgba(255,94,108,0.75)'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
 
+  // ── Weekdag patroon ──
   const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
   state.transactions.filter(t=>t.type==='expense').forEach(t=>{const d=(new Date(t.date).getDay()+6)%7;wd[d]+=t.amt;wc[d]++;});
   const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
   const ctx4=document.getElementById('weekdayChart').getContext('2d');
   if(charts.weekday)charts.weekday.destroy();
-  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:'rgba(108,138,255,0.7)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,94,108,0.8)':'rgba(108,138,255,0.6)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+
   renderInsights();
 }
+
+/* ── Verhaal: wat gebeurt er met je geld ── */
+function renderMoneyStory() {
+  const storyEl = document.getElementById('moneyStory');
+  const flowEl  = document.getElementById('moneyFlowBars');
+  if (!storyEl || !flowEl) return;
+
+  const cycles = getLastNCycles(2);
+  const [prev, curr] = cycles;
+  const currTx = state.transactions.filter(t => curr.match(t));
+  const prevTx = state.transactions.filter(t => prev.match(t));
+
+  const income  = currTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+  const expense = currTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+  const prevExp = prevTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+  const savings = income - expense;
+  const savPct  = income > 0 ? Math.round((savings/income)*100) : 0;
+  const expDiff = expense - prevExp;
+
+  // Categorie met grootste stijging
+  const cats = {};
+  const prevCats = {};
+  currTx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
+  prevTx.filter(t=>t.type==='expense').forEach(t=>{prevCats[t.cat]=(prevCats[t.cat]||0)+t.amt;});
+  const biggestCat = Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
+  const biggestRise = Object.entries(cats)
+    .map(([cat,amt])=>({cat,amt,prev:prevCats[cat]||0,diff:amt-(prevCats[cat]||0)}))
+    .sort((a,b)=>b.diff-a.diff)[0];
+
+  // Bouw het verhaal
+  let story = '';
+  if (income === 0) {
+    story = 'Voeg inkomsten en uitgaven toe om je geldverhaal te zien.';
+  } else {
+    const cycleLabel_ = curr.fullLabel || curr.label;
+    story += `In de cyclus <strong>${cycleLabel_}</strong> verdiende je <strong style="color:var(--green)">${fmt(income)}</strong> en gaf je <strong style="color:var(--red)">${fmt(expense)}</strong> uit. `;
+
+    if (savings >= 0) {
+      story += `Je hield <strong style="color:var(--green)">${fmt(savings)}</strong> over — dat is <strong>${savPct}%</strong> van je inkomen. `;
+    } else {
+      story += `Je gaf <strong style="color:var(--red)">${fmt(Math.abs(savings))}</strong> meer uit dan je verdiende. `;
+    }
+
+    if (biggestCat) {
+      story += `Het meeste ging naar <strong>${biggestCat[0]}</strong> (${fmt(biggestCat[1])}). `;
+    }
+
+    if (prevExp > 0 && expDiff !== 0) {
+      const dir = expDiff > 0 ? 'meer' : 'minder';
+      const color = expDiff > 0 ? 'var(--red)' : 'var(--green)';
+      story += `Ten opzichte van de vorige cyclus gaf je <strong style="color:${color}">${fmt(Math.abs(expDiff))} ${dir}</strong> uit`;
+      if (biggestRise && biggestRise.diff > 0 && expDiff > 0) {
+        story += `, vooral door een stijging in <strong>${biggestRise.cat}</strong> (+${fmt(biggestRise.diff)})`;
+      }
+      story += '.';
+    }
+  }
+  storyEl.innerHTML = story;
+
+  // Geldstroom balken: hoe wordt het inkomen verdeeld?
+  if (income > 0) {
+    const catTotals = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+    const transferAmt = currTx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0);
+    const allItems = [...catTotals.map(([cat,amt])=>({label:cat,amt,color:catColor(cat)}))];
+    if (transferAmt > 0) allItems.push({label:'Transfers',amt:transferAmt,color:'var(--purple)'});
+    if (savings > 0) allItems.push({label:'Gespaard',amt:savings,color:'var(--green)'});
+
+    flowEl.innerHTML = `
+      <div class="flow-bar-track">
+        ${allItems.map(item=>`<div class="flow-bar-seg" style="width:${Math.min(100,Math.round((item.amt/income)*100))}%;background:${item.color}" title="${item.label}: ${fmt(item.amt)}"></div>`).join('')}
+      </div>
+      <div class="flow-bar-legend">
+        ${allItems.slice(0,6).map(item=>`<span class="flow-legend-item"><span style="background:${item.color}" class="flow-legend-dot"></span>${item.label} <span class="flow-legend-pct">${Math.round((item.amt/income)*100)}%</span></span>`).join('')}
+      </div>`;
+  } else {
+    flowEl.innerHTML = '';
+  }
+}
+
+/* ── Categorie verdeling ── */
+function renderCatBreakdown() {
+  const el = document.getElementById('catBreakdownList');
+  const subEl = document.getElementById('catBreakdownSub');
+  if (!el) return;
+
+  const cycles = getLastNCycles(2);
+  const curr = cycles[1];
+  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
+  const total = currTx.reduce((a,t)=>a+t.amt,0);
+  if (subEl) subEl.textContent = `Totaal ${fmt(total)} deze cyclus`;
+
+  const cats = {};
+  currTx.forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
+  const sorted = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+
+  if (!sorted.length) { el.innerHTML = '<div class="empty-state">Geen uitgaven deze cyclus</div>'; return; }
+
+  el.innerHTML = sorted.map(([cat,amt])=>{
+    const pct = total>0 ? Math.round((amt/total)*100) : 0;
+    const col = catColor(cat);
+    return `<div class="cat-breakdown-row">
+      <span class="cat-breakdown-dot" style="background:${col}"></span>
+      <span class="cat-breakdown-name">${catEmoji(cat)} ${cat}</span>
+      <div class="cat-breakdown-bar-wrap">
+        <div class="cat-breakdown-bar" style="width:${pct}%;background:${col}"></div>
+      </div>
+      <span class="cat-breakdown-amt">${fmt(amt)}</span>
+      <span class="cat-breakdown-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+/* ── Vaste vs variabele lasten ── */
+const FIXED_CATS = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening','Transport'];
+
+function renderFixedVarChart(grid, text) {
+  const cycles = getLastNCycles(2);
+  const curr = cycles[1];
+  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
+  const fixed    = currTx.filter(t=>FIXED_CATS.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
+  const variable = currTx.filter(t=>!FIXED_CATS.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
+
+  const ctx = document.getElementById('fixedVarChart');
+  if (!ctx) return;
+  if (charts.fixedVar) charts.fixedVar.destroy();
+
+  if (fixed + variable === 0) return;
+
+  charts.fixedVar = new Chart(ctx.getContext('2d'),{
+    type:'doughnut',
+    data:{
+      labels:['Vaste lasten','Variabel'],
+      datasets:[{
+        data:[Math.round(fixed),Math.round(variable)],
+        backgroundColor:['rgba(108,138,255,0.8)','rgba(52,212,138,0.8)'],
+        borderWidth:2,
+        borderColor: 'var(--bg2)',
+        hoverOffset:6
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${state.settings.currency}${c.raw.toLocaleString('nl-NL')} (${Math.round(c.raw/(fixed+variable)*100)}%)`}}}}
+  });
+
+  const legEl = document.getElementById('fixedVarLegend');
+  if (legEl) {
+    const total = fixed + variable;
+    legEl.innerHTML = `
+      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(108,138,255,0.8)"></span>Vaste lasten</span><span class="donut-leg-amt">${fmt(fixed)} <small style="color:var(--text3)">${Math.round(fixed/total*100)}%</small></span></div>
+      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(52,212,138,0.8)"></span>Variabel</span><span class="donut-leg-amt">${fmt(variable)} <small style="color:var(--text3)">${Math.round(variable/total*100)}%</small></span></div>`;
+  }
+}
+
+/* ── Cyclus vergelijking per categorie ── */
+function renderCycleCompare() {
+  const el = document.getElementById('cycleCompareList');
+  if (!el) return;
+
+  const cycles = getLastNCycles(2);
+  const [prev, curr] = cycles;
+  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
+  const prevTx = state.transactions.filter(t=>prev.match(t)&&t.type==='expense');
+
+  const cats = {}, prevCats = {};
+  currTx.forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
+  prevTx.forEach(t=>{prevCats[t.cat]=(prevCats[t.cat]||0)+t.amt;});
+
+  const allCats = [...new Set([...Object.keys(cats),...Object.keys(prevCats)])];
+  const diffs = allCats.map(cat=>({cat, curr:cats[cat]||0, prev:prevCats[cat]||0, diff:(cats[cat]||0)-(prevCats[cat]||0)})).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+
+  if (!diffs.length) { el.innerHTML = '<div class="empty-state">Niet genoeg data voor vergelijking</div>'; return; }
+
+  el.innerHTML = diffs.slice(0,8).map(d=>{
+    const col = catColor(d.cat);
+    const isUp = d.diff > 0;
+    const diffColor = isUp ? 'var(--red)' : 'var(--green)';
+    const arrow = isUp ? '↑' : '↓';
+    return `<div class="cat-breakdown-row">
+      <span class="cat-breakdown-dot" style="background:${col}"></span>
+      <span class="cat-breakdown-name">${catEmoji(d.cat)} ${d.cat}</span>
+      <span style="flex:1"></span>
+      <span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--text2)">${fmt(d.curr)}</span>
+      <span style="font-size:12px;font-weight:600;color:${d.diff===0?'var(--text3)':diffColor};margin-left:8px;min-width:60px;text-align:right">${d.diff===0?'—':`${arrow} ${fmt(Math.abs(d.diff))}`}</span>
+    </div>`;
+  }).join('');
+}
+
 
 function renderInsights(){
   const{income,expense,balance,cats,burnDaily,projected}=computeMetrics();
