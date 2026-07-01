@@ -2311,3 +2311,161 @@ body.app-locked .bottom-nav {
 body.app-locked .pin-screen {
   visibility: visible;
 }
+
+/* ── Category edit button ── */
+.cat-manage-edit {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color var(--transition), background var(--transition);
+  margin-left: auto;
+  line-height: 1;
+}
+.cat-manage-edit:hover { color: var(--accent); background: var(--accent-dim); }
+
+/* ═══════════════════════════════════════════════
+   ANALYTICS — VERHAAL & NIEUWE SECTIES
+   ═══════════════════════════════════════════════ */
+
+/* Money story card */
+.money-story-card {
+  margin-bottom: 14px;
+}
+
+.money-story-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.money-story-icon {
+  font-size: 20px;
+}
+
+.money-story-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text2);
+  margin-bottom: 16px;
+}
+
+.money-story-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Geldstroom balkje */
+.flow-bar-track {
+  display: flex;
+  height: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.flow-bar-seg {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  min-width: 2px;
+}
+
+.flow-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 6px;
+}
+
+.flow-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.flow-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.flow-legend-pct {
+  color: var(--text3);
+  font-size: 11px;
+}
+
+/* Categorie breakdown lijst */
+.cat-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.cat-breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cat-breakdown-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-breakdown-name {
+  min-width: 100px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-breakdown-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cat-breakdown-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.cat-breakdown-amt {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 64px;
+  text-align: right;
+}
+
+.cat-breakdown-pct {
+  font-size: 11px;
+  color: var(--text3);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* card sub label */
+.card-sub {
+  font-size: 12px;
+  color: var(--text3);
+}
