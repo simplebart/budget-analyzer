@@ -1410,7 +1410,7 @@ body {
   .main {
     margin-left: 0;
     max-width: 100vw;
-    padding: 76px 16px 24px;
+    padding: 76px 20px 24px;
   }
 
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1421,6 +1421,7 @@ body {
   .settings-grid { grid-template-columns: 1fr; }
   .insights-grid { grid-template-columns: 1fr 1fr; }
   .filter-bar { flex-direction: column; align-items: stretch; }
+  .savings-kpi-row { grid-template-columns: 1fr; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -1430,20 +1431,26 @@ body {
 
   /* ── CORE LAYOUT ── */
   .sidebar { display: none !important; }
+  :root { --sidebar-w: 0px !important; }
+
+  body {
+    display: block !important; /* Reset flex so sidebar doesn't affect layout */
+    overflow-x: hidden;
+  }
+
+  .sidebar { display: none !important; }
+
   .main {
     margin-left: 0 !important;
     max-width: 100vw !important;
     width: 100vw !important;
-    padding: 72px 0 84px 0 !important; /* top: topbar height, bottom: nav height */
-    box-sizing: border-box;
+    padding: 70px 14px 90px !important;
+    box-sizing: border-box !important;
     overflow-x: hidden;
   }
-  :root { --sidebar-w: 0px; }
+
   .bottom-nav { display: flex; }
   .topbar { display: flex; }
-
-  /* Pages fill the screen properly */
-  .page { padding: 14px 14px 0; }
 
   /* ── TOPBAR — clean native feel ── */
   .topbar {
@@ -1966,10 +1973,7 @@ body {
   border-top: 1px solid var(--border);
 }
 
-@media (max-width: 900px) {
-  .savings-kpi-row { grid-template-columns: 1fr; }
-  .savings-kpi-row .card { grid-column: span 1; }
-}
+/* savings kpi moved to main 900px block */
 
 /* ═══════════════════════════════════════════════
    GOOGLE SHEETS SYNC
@@ -2071,10 +2075,7 @@ body {
 .mobile-quick-btn span:nth-child(2) { flex: 1; }
 .mobile-quick-arrow { color: var(--text3); font-size: 18px; font-weight: 300; }
 
-@media (max-width: 600px) {
-  .mobile-quick-nav { display: flex; }
-  .bottom-nav { display: flex; }
-}
+/* bottom-nav moved to main 600px block */
 
 /* ═══════════════════════════════════════════════
    WELCOME SCREEN — minimal
