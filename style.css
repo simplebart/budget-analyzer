@@ -1516,7 +1516,8 @@ body {
   /* ── CHARTS ── */
   .charts-row { flex-direction: column; gap: 12px; }
   .chart-wrap { height: 200px !important; }
-  .donut-wrap { width: 130px; height: 130px; }
+  .donut-wrap { width: 130px; height: 130px; margin: 0 auto 12px; }
+  .donut-wrap canvas { width: 130px !important; height: 130px !important; }
 
   /* Cashflow legend */
   .chart-legend { flex-wrap: wrap; gap: 6px; font-size: 11px; }
