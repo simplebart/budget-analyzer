@@ -1,2535 +1,2816 @@
-'use strict';
+/* ═══════════════════════════════════════════════
+   BUDGETFLOW — COMPLETE STYLESHEET
+   ═══════════════════════════════════════════════ */
+
+:root {
+  --bg: #0f0f13;
+  --bg2: #16161d;
+  --bg3: #1e1e28;
+  --border: rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.13);
+  --text: #f0f0f4;
+  --text2: #9090a8;
+  --text3: #5a5a72;
+  --accent: #6c8aff;
+  --accent-dim: rgba(108,138,255,0.12);
+  --accent-dim2: rgba(108,138,255,0.22);
+  --green: #34d48a;
+  --green-dim: rgba(52,212,138,0.12);
+  --red: #ff5e6c;
+  --red-dim: rgba(255,94,108,0.12);
+  --amber: #ffb340;
+  --amber-dim: rgba(255,179,64,0.12);
+  --purple: #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+  --radius: 10px;
+  --radius-lg: 16px;
+  --sidebar-w: 232px;  /* 208px sidebar + 12px left + 12px gap */
+  --currency: "€";
+  --transition: 0.18s ease;
+}
+
+[data-theme="light"] {
+  --bg: #f4f4f8;
+  --bg2: #ffffff;
+  --bg3: #eeeef4;
+  --border: rgba(0,0,0,0.07);
+  --border-strong: rgba(0,0,0,0.13);
+  --text: #0f0f18;
+  --text2: #5a5a72;
+  --text3: #9090a8;
+  --accent-dim: rgba(108,138,255,0.10);
+  --accent-dim2: rgba(108,138,255,0.18);
+  --green-dim: rgba(52,212,138,0.10);
+  --red-dim: rgba(255,94,108,0.10);
+  --amber-dim: rgba(255,179,64,0.10);
+  --purple-dim: rgba(167,139,250,0.10);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
 /* ═══════════════════════════════════════════════
-   STATE
+   SIDEBAR
    ═══════════════════════════════════════════════ */
-let state = {
-  transactions: [],
-  budgets: {},
-  goals: [],
-  savings: {
-    accounts: [],       // [{ id, name, balance, color, target, note }]
-    transactions: []    // [{ id, accountId, type:'deposit'|'withdrawal'|'interest', amt, date, desc }]
-  },
-  categories: [
-    { name:'Wonen',          emoji:'🏠', color:'#6c8aff', deletable:false },
-    { name:'Boodschappen',   emoji:'🛒', color:'#34d48a', deletable:false },
-    { name:'Transport',      emoji:'🚌', color:'#ffb340', deletable:false },
-    { name:'Eten & Drinken', emoji:'🍽', color:'#ff5e6c', deletable:false },
-    { name:'Gezondheid',     emoji:'💊', color:'#a78bfa', deletable:false },
-    { name:'Vrije tijd',     emoji:'🎮', color:'#f472b6', deletable:false },
-    { name:'Abonnementen',   emoji:'📱', color:'#fb923c', deletable:false },
-    { name:'Kleding',        emoji:'👕', color:'#22d3ee', deletable:false },
-    { name:'Sparen',         emoji:'💰', color:'#4ade80', deletable:false },
-    { name:'Overig',         emoji:'📦', color:'#94a3b8', deletable:false },
-  ],
-  settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1 },
-  recurring: [],        // [{ id, type, desc, amt, day, cat }]
-  lastRecurringMonth: '',  // 'YYYY-MM' of last applied month
-  firstVisit: true,
-  filters: { type:'all', cat:'all', sort:'date-desc', search:'' },
-  analyticsPeriod: 'month',
-  selectedGoalColor: '#6c8aff'
-};
-
-let charts = {};
-
-// CSV state
-let csvParsed = { headers:[], rows:[], mapping:{}, finalRows:[] };
-let csvStep = 1;
-let selectedBank = 'auto';
-
-const GOAL_COLORS = ['#6c8aff','#34d48a','#ffb340','#ff5e6c','#a78bfa','#f472b6','#fb923c','#22d3ee'];
-const SAVINGS_COLORS = ['#34d48a','#6c8aff','#ffb340','#f472b6','#a78bfa','#22d3ee','#fb923c','#ff5e6c'];
-
-/* ═══════════════════════════════════════════════
-   UTILS
-   ═══════════════════════════════════════════════ */
-const fmt = n => state.settings.currency + Math.abs(Math.round(n * 100) / 100).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fmtSigned = n => (n >= 0 ? '+' : '−') + fmt(Math.abs(n));
-/* Tijdzone-veilige datumfunctie: gebruikt ALTIJD de lokale datum,
-   nooit UTC. toISOString() converteert naar UTC, wat in Nederland/België
-   (UTC+1 of UTC+2) ervoor zorgt dat datums rond middernacht naar de
-   verkeerde dag verschuiven. Dit was de oorzaak van de mei/juni-bug. */
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-};
-const getDayOfMonth = () => new Date().getDate();
-const getDaysInMonth = () => new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
-const monthName = d => d.toLocaleDateString('nl-NL', { month:'long', year:'numeric' });
-
-/* ── Budgetcyclus: aangepaste periode i.p.v. kalendermaand ──
-   cycleStartDay = 1 betekent gewone kalendermaand.
-   cycleStartDay = 25 betekent: periode loopt van de 25e t/m de 24e volgende maand. */
-function getCycleStartDay() { return state.settings.cycleStartDay || 1; }
-
-function getCurrentCycleRange() {
-  const startDay = getCycleStartDay();
-  const now = new Date();
-  let cycleStart;
-  if (now.getDate() >= startDay) {
-    cycleStart = new Date(now.getFullYear(), now.getMonth(), startDay);
-  } else {
-    cycleStart = new Date(now.getFullYear(), now.getMonth() - 1, startDay);
-  }
-  const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
-  return { start: cycleStart, end: cycleEnd };
+.sidebar {
+  width: 208px;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 12px; left: 12px; bottom: 12px;
+  z-index: 100;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset;
+  overflow: hidden;
 }
 
-function dateToStr(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+[data-theme="light"] .sidebar {
+  background: rgba(248, 248, 252, 0.82);
+  border: 1px solid rgba(0,0,0,0.07);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,0.9) inset;
 }
 
-function getCycleDayProgress() {
-  const { start } = getCurrentCycleRange();
-  const now = new Date();
-  const diffMs = now - start;
-  return Math.floor(diffMs / (1000*60*60*24)) + 1; // day 1 = start day
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 
-function getCycleTotalDays() {
-  const { start, end } = getCurrentCycleRange();
-  const diffMs = end - start;
-  return Math.round(diffMs / (1000*60*60*24)) + 1;
+.logo-icon {
+  font-size: 22px;
+  color: var(--accent);
+  line-height: 1;
 }
 
-function cycleLabel() {
-  const startDay = getCycleStartDay();
-  const { start, end } = getCurrentCycleRange();
-  if (startDay === 1) return monthName(start);
-  const fmt = (d) => d.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
-  return `${fmt(start)} – ${fmt(end)}`;
+.logo-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
 }
 
-function getCycleRangeFor(refDate) {
-  const startDay = getCycleStartDay();
-  let cycleStart;
-  if (refDate.getDate() >= startDay) {
-    cycleStart = new Date(refDate.getFullYear(), refDate.getMonth(), startDay);
-  } else {
-    cycleStart = new Date(refDate.getFullYear(), refDate.getMonth() - 1, startDay);
-  }
-  const cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
-  return { start: cycleStart, end: cycleEnd };
+.sidebar-nav {
+  flex: 1;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-/* ── Centrale helper: bouw de laatste N budgetcycli, nieuwste laatst ──
-   Gebruikt overal waar voorheen kalendermaanden werden opgebouwd
-   (Cashflow-grafiek, Analytics, Categorie-trends, etc). Elke cyclus
-   krijgt zijn eigen 'match'-functie (tijdzone-veilige stringvergelijking,
-   géén Date-objecten, dus geen risico op de eerdere UTC-verschuivingsbug)
-   en een leesbaar label gebaseerd op de startdag van de cyclus. */
-function getLastNCycles(n) {
-  const startDay = getCycleStartDay();
-  const { start: currentCycleStart } = getCurrentCycleRange();
-  const cycles = [];
-
-  for (let i = n - 1; i >= 0; i--) {
-    const cycleStart = new Date(currentCycleStart.getFullYear(), currentCycleStart.getMonth() - i, startDay);
-    const cycleEnd   = new Date(cycleStart.getFullYear(), cycleStart.getMonth() + 1, startDay - 1);
-    const startStr = dateToStr(cycleStart);
-    const endStr   = dateToStr(cycleEnd);
-
-    // Label toont de maand waar de cyclus het MEEST in valt (gebaseerd op het einde),
-    // niet de maand waarin hij toevallig begint. Een cyclus van 25 april t/m 24 mei
-    // bevat 6 dagen april en 24 dagen mei, en hoort dus "mei" te heten — niet "apr".
-    const label = cycleEnd.toLocaleDateString('nl-NL', { month:'short' });
-
-    cycles.push({
-      start: cycleStart,
-      end: cycleEnd,
-      match: t => t.date >= startStr && t.date <= endStr,
-      label,
-      fullLabel: startDay === 1
-        ? cycleStart.toLocaleDateString('nl-NL', { month:'long', year:'numeric' })
-        : `${cycleStart.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} – ${cycleEnd.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}`
-    });
-  }
-  return cycles;
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  width: 100%;
+  text-align: left;
+  flex-shrink: 0;
 }
-const catColor = name => (state.categories.find(c=>c.name===name)||{color:'#94a3b8'}).color;
-const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'}).emoji;
 
-/* ═══════════════════════════════════════════════
-   PERSISTENCE
-   ═══════════════════════════════════════════════ */
-function saveState(skipSync) {
-  try { localStorage.setItem('budgetflow_v4', JSON.stringify(state)); } catch(e) {}
-  if (!skipSync) autoSync();
+.nav-item:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+
+.nav-item.active {
+  background: rgba(108,138,255,0.18);
+  color: var(--accent);
 }
-function loadState() {
-  loadGsConfig();
-  try {
-    const raw = localStorage.getItem('budgetflow_v4');
-    if (!raw) {
-      // Migrate from v3
-      const old = localStorage.getItem('budgetflow_v3');
-      if (old) {
-        const s = JSON.parse(old);
-        state.transactions = s.transactions || [];
-        state.budgets = s.budgets || {};
-        state.goals = s.goals || [];
-        state.settings = { ...state.settings, ...(s.settings||{}) };
-        if (s.categories && s.categories.length) state.categories = s.categories;
-      }
-      return;
-    }
-    const saved = JSON.parse(raw);
-    if (saved.categories && saved.categories.length) state.categories = saved.categories;
-    state = { ...state, ...saved, categories: state.categories };
-    if (!state.savings) state.savings = { accounts:[], transactions:[] };
-  } catch(e) {}
+
+.nav-item svg { flex-shrink: 0; opacity: 0.8; }
+.nav-item.active svg { opacity: 1; }
+
+.sidebar-month {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.month-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+
+.month-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: capitalize;
 }
 
 /* ═══════════════════════════════════════════════
-   NAVIGATION
+   MOBILE TOPBAR
    ═══════════════════════════════════════════════ */
-const PAGE_TITLES = {
-  dashboard:'Dashboard', transactions:'Transacties', analytics:'Analytics',
-  budget:'Budgetten', goals:'Doelen', savings:'Spaarrekening', settings:'Instellingen'
-};
-
-function navigate(page) {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.querySelectorAll('.bottom-nav-item').forEach(n=>n.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll(`[data-page="${page}"]`).forEach(el=>el.classList.add('active'));
-  document.getElementById('topbarTitle').textContent = PAGE_TITLES[page]||page;
-  // Show/hide topbar action button based on page
-  const actionBtn = document.getElementById('topbarAction');
-  if (actionBtn) {
-    const showAction = ['dashboard','transactions'].includes(page);
-    actionBtn.style.display = showAction ? '' : 'none';
-    actionBtn.onclick = page === 'transactions'
-      ? () => openModal('addTransaction')
-      : () => openModal('addTransaction');
-  }
-  if (window.innerWidth <= 900) closeSidebar();
-  if (page==='dashboard')    renderDashboard();
-  if (page==='transactions') { resetTxFilters(); renderTransactions(); }
-  if (page==='analytics')    renderAnalytics();
-  if (page==='budget')       renderBudgets();
-  if (page==='goals')        renderGoals();
-  if (page==='savings')      renderSavings();
-  if (page==='settings')     renderSettings();
-  if (page==='recurring')    renderRecurring();
+.topbar {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 56px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 200;
 }
 
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
-function closeSidebar()   { document.getElementById('sidebar').classList.remove('open'); }
-
-/* ═══════════════════════════════════════════════
-   MODAL
-   ═══════════════════════════════════════════════ */
-function openModal(id) {
-  document.getElementById('modalBackdrop').classList.add('open');
-  document.getElementById('modal-'+id).classList.add('open');
-  if (id==='addTransaction' && !editingTxId) {
-    document.getElementById('txDate').value = today();
-    populateCatSelect('txCat');
-    document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie toevoegen';
-    document.querySelector('#modal-addTransaction .btn-primary').textContent = 'Opslaan';
-    setTimeout(()=>document.getElementById('txDesc').focus(), 50);
-  }
-  if (id==='addBudget') populateCatSelect('budgetCat');
-  if (id==='addGoal') {
-    renderGoalColorPicker();
-    const d=new Date(); d.setFullYear(d.getFullYear()+1);
-    document.getElementById('goalDate').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
-  if (id==='importCSV') resetCSVModal();
-  if (id==='addSavingsAccount') {
-    document.getElementById('savAccName').value = '';
-    document.getElementById('savAccBalance').value = '';
-    document.getElementById('savAccTarget').value = '';
-    document.getElementById('savAccNote').value = '';
-    renderSavingsColorPicker();
-  }
+.hamburger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
 }
 
-function closeModal() {
-  document.getElementById('modalBackdrop').classList.remove('open');
-  document.querySelectorAll('.modal').forEach(m=>m.classList.remove('open'));
-  editingTxId = null;
-  document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie toevoegen';
-  document.querySelector('#modal-addTransaction .btn-primary').textContent = 'Opslaan';
+.hamburger span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text2);
+  border-radius: 1px;
 }
 
-function populateCatSelect(id) {
-  const sel = document.getElementById(id);
-  if (!sel) return;
-  sel.innerHTML = state.categories.map(c=>`<option value="${c.name}">${c.emoji} ${c.name}</option>`).join('');
+.topbar-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 /* ═══════════════════════════════════════════════
-   TRANSACTION FORM
+   MAIN
    ═══════════════════════════════════════════════ */
-let currentTxType = 'income';
-let editingTxId = null;
-
-function setTxType(type) {
-  currentTxType = type;
-  ['income','expense','transfer'].forEach(t => {
-    const btn = document.getElementById('typeBtn'+t.charAt(0).toUpperCase()+t.slice(1));
-    if (btn) btn.classList.toggle('active', t===type);
-  });
-  document.getElementById('catGroupWrap').style.display = type==='expense' ? '' : 'none';
-  document.getElementById('transferAccountsWrap').style.display = type==='transfer' ? '' : 'none';
-}
-
-function editTx(id) {
-  const tx = state.transactions.find(t => t.id === id);
-  if (!tx) return;
-  editingTxId = id;
-
-  // Pre-fill the form
-  setTxType(tx.type);
-  document.getElementById('txDesc').value = tx.desc;
-  document.getElementById('txAmount').value = tx.amt;
-  // Zorg dat de datum altijd in YYYY-MM-DD formaat staat voor het datumveld
-  // tx.date kan opgeslagen zijn als "2026-05-28" of als timestamp "2026-05-28T22:00:00.000Z"
-  let txDateStr = tx.date || '';
-  if (txDateStr.includes('T')) {
-    // ISO timestamp — haal lokale datum eruit zonder tijdzone-verschuiving
-    const d = new Date(txDateStr);
-    txDateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
-  // Als het nog steeds geen YYYY-MM-DD is, probeer te parsen
-  if (txDateStr && !/^\d{4}-\d{2}-\d{2}$/.test(txDateStr)) {
-    const parsed = new Date(txDateStr);
-    if (!isNaN(parsed)) {
-      txDateStr = `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
-    } else {
-      txDateStr = today(); // fallback naar vandaag als datum onparseerbaar is
-    }
-  }
-  document.getElementById('txDate').value = txDateStr;
-  // Repareer ook de opgeslagen datum als die een tijdstempel bevat
-  if (tx.date && tx.date.includes('T')) { tx.date = txDateStr; }
-  document.getElementById('txNote').value = tx.note || '';
-  populateCatSelect('txCat');
-  if (tx.type === 'expense') document.getElementById('txCat').value = tx.cat;
-  if (tx.type === 'transfer') {
-    document.getElementById('txFromAccount').value = tx.fromAccount || '';
-    document.getElementById('txToAccount').value = tx.toAccount || '';
-  }
-
-  document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie bewerken';
-  document.querySelector('#modal-addTransaction .btn-primary').textContent = 'Wijzigingen opslaan';
-
-  document.getElementById('modalBackdrop').classList.add('open');
-  document.getElementById('modal-addTransaction').classList.add('open');
-  setTimeout(()=>document.getElementById('txDesc').focus(), 50);
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  padding: 28px 32px;
+  max-width: calc(100vw - var(--sidebar-w));
+  overflow-x: hidden;
+  min-height: 100vh;
 }
 
 /* ═══════════════════════════════════════════════
-   AUTO-CATEGORISATIE
-   Leert van je transactiegeschiedenis: als je "Albert Heijn"
-   eerder als Boodschappen categoriseerde, stelt de app dat
-   automatisch voor bij een volgende invoer.
+   PAGES
    ═══════════════════════════════════════════════ */
+.page { display: none; }
+.page.active { display: block; }
 
-function suggestCategory(desc) {
-  if (!desc || desc.length < 2) return null;
-  const q = desc.toLowerCase().trim();
-
-  // Zoek exacte of gedeeltelijke matches in eerdere uitgaven
-  const matches = state.transactions
-    .filter(t => t.type === 'expense' && t.cat)
-    .filter(t => {
-      const d = t.desc.toLowerCase();
-      return d === q || d.includes(q) || q.includes(d);
-    });
-
-  if (!matches.length) return null;
-
-  // Tel welke categorie het vaakst voorkomt voor deze omschrijving
-  const counts = {};
-  matches.forEach(t => { counts[t.cat] = (counts[t.cat] || 0) + 1; });
-  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-  return best ? best[0] : null;
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
 }
 
-function initAutoCategory() {
-  const descEl = document.getElementById('txDesc');
-  const catEl  = document.getElementById('txCat');
-  if (!descEl || !catEl) return;
-
-  let userChangedCat = false;
-
-  // Als gebruiker zelf categorie wijzigt, niet meer overschrijven
-  catEl.addEventListener('change', () => { userChangedCat = true; });
-
-  descEl.addEventListener('input', () => {
-    if (userChangedCat || currentTxType !== 'expense') return;
-    const suggestion = suggestCategory(descEl.value);
-    if (suggestion && [...catEl.options].some(o => o.value === suggestion)) {
-      catEl.value = suggestion;
-      // Visuele feedback: kort oplichten
-      catEl.style.transition = 'border-color 0.3s';
-      catEl.style.borderColor = 'var(--green)';
-      setTimeout(() => { catEl.style.borderColor = ''; }, 800);
-    }
-  });
-
-  // Reset de flag als de modal opnieuw wordt geopend
-  const origOpenModal = window.openModal;
-  window.openModal = function(id) {
-    if (id === 'addTransaction') userChangedCat = false;
-    return origOpenModal.apply(this, arguments);
-  };
+.page-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
-function saveTx() {
-  const desc = document.getElementById('txDesc').value.trim();
-  const amt  = parseFloat(document.getElementById('txAmount').value);
-  const date = document.getElementById('txDate').value || today();
-  const note = document.getElementById('txNote').value.trim();
-  if (!desc || isNaN(amt) || amt <= 0) { document.getElementById('txDesc').focus(); return; }
-  let cat = currentTxType==='income' ? 'Inkomst' : currentTxType==='transfer' ? 'Transfer' : document.getElementById('txCat').value;
-  const fromAccount = currentTxType==='transfer' ? document.getElementById('txFromAccount').value.trim() : '';
-  const toAccount   = currentTxType==='transfer' ? document.getElementById('txToAccount').value.trim() : '';
-
-  if (editingTxId) {
-    // Update existing transaction in place
-    const tx = state.transactions.find(t => t.id === editingTxId);
-    if (tx) {
-      tx.type = currentTxType;
-      tx.desc = desc;
-      tx.amt = amt;
-      tx.date = date;
-      tx.note = note;
-      tx.cat = cat;
-      tx.fromAccount = fromAccount;
-      tx.toAccount = toAccount;
-    }
-    showToast('Transactie bijgewerkt', 'success');
-  } else {
-    state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount });
-  }
-
-  saveState();
-  closeModal();
-  renderDashboard();
-  renderTransactions();
-  updateCatFilter();
-}
-
-function deleteTx(id) {
-  state.transactions = state.transactions.filter(t=>t.id!==id);
-  saveState();
-  renderDashboard();
-  renderTransactions();
+.page-sub {
+  font-size: 13px;
+  color: var(--text3);
+  margin-top: 4px;
 }
 
 /* ═══════════════════════════════════════════════
-   CATEGORIES
+   BUTTONS
    ═══════════════════════════════════════════════ */
-function addCategory() {
-  const name  = document.getElementById('newCatName').value.trim();
-  const emoji = document.getElementById('newCatEmoji').value.trim() || '🏷';
-  const color = document.getElementById('newCatColor').value;
-  if (!name) return;
-  if (state.categories.find(c=>c.name.toLowerCase()===name.toLowerCase())) { alert('Categorie bestaat al.'); return; }
-  state.categories.push({ name, emoji, color, deletable:true });
-  document.getElementById('newCatName').value = '';
-  document.getElementById('newCatEmoji').value = '';
-  saveState();
-  renderCatManageList();
-  populateCatSelect('txCat');
-  updateCatFilter();
+.btn-primary {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 18px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity var(--transition), transform var(--transition);
+  white-space: nowrap;
 }
 
-function deleteCategory(name) {
-  const inUse = state.transactions.some(t=>t.cat===name);
-  if (inUse && !confirm(`"${name}" wordt gebruikt. Toch verwijderen?`)) return;
-  state.categories = state.categories.filter(c=>c.name!==name);
-  if (inUse) state.transactions.forEach(t=>{ if(t.cat===name) t.cat='Overig'; });
-  saveState();
-  renderCatManageList();
-  renderDashboard();
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-primary-sm {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity var(--transition);
 }
 
-function renderCatManageList() {
-  const el = document.getElementById('catManageList');
-  if (!el) return;
-  el.innerHTML = state.categories.map(c=>`
-    <div class="cat-manage-row">
-      <span class="cat-manage-dot" style="background:${c.color}"></span>
-      <span class="cat-manage-emoji">${c.emoji}</span>
-      <span class="cat-manage-name">${c.name}</span>
-      <button class="cat-manage-edit" onclick="openEditCategory('${c.name}')" title="Bewerken">✎</button>
-      <button class="cat-manage-del" onclick="deleteCategory('${c.name}')" ${!c.deletable?'disabled title="Standaard"':''}>×</button>
-    </div>`).join('');
+.btn-primary-sm:hover { opacity: 0.88; }
+
+.btn-secondary {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 18px;
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
 }
 
-let editingCatName = null;
+.btn-secondary:hover { background: var(--bg3); color: var(--text); }
 
-function openEditCategory(name) {
-  const cat = state.categories.find(c => c.name === name);
-  if (!cat) return;
-  editingCatName = name;
-  document.getElementById('editCatName').value = cat.name;
-  document.getElementById('editCatEmoji').value = cat.emoji;
-  document.getElementById('editCatColor').value = cat.color;
-  document.getElementById('modalBackdrop').classList.add('open');
-  document.getElementById('modal-editCategory').classList.add('open');
-  setTimeout(() => document.getElementById('editCatName').focus(), 50);
+.btn-danger {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 18px;
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(255,94,108,0.25);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity var(--transition);
 }
 
-function saveEditCategory() {
-  const cat = state.categories.find(c => c.name === editingCatName);
-  if (!cat) return;
-  const newName  = document.getElementById('editCatName').value.trim();
-  const newEmoji = document.getElementById('editCatEmoji').value.trim() || cat.emoji;
-  const newColor = document.getElementById('editCatColor').value;
-  if (!newName) return;
+.btn-danger:hover { opacity: 0.8; }
 
-  // If name changed, update all transactions that use the old name
-  if (newName !== editingCatName) {
-    if (state.categories.find(c => c.name.toLowerCase() === newName.toLowerCase() && c.name !== editingCatName)) {
-      alert('Die naam bestaat al.'); return;
-    }
-    state.transactions.forEach(t => { if (t.cat === editingCatName) t.cat = newName; });
-    state.budgets[newName] = state.budgets[editingCatName];
-    delete state.budgets[editingCatName];
-  }
+.link-btn {
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: opacity var(--transition);
+}
 
-  cat.name  = newName;
-  cat.emoji = newEmoji;
-  cat.color = newColor;
+.link-btn:hover { opacity: 0.7; }
 
-  saveState();
-  closeModal();
-  renderCatManageList();
-  populateCatSelect('txCat');
-  populateCatSelect('budgetCat');
-  updateCatFilter();
-  renderDashboard();
+/* ═══════════════════════════════════════════════
+   KPI CARDS
+   ═══════════════════════════════════════════════ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+}
+
+.kpi-icon {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.income-icon { color: var(--green); }
+.expense-icon { color: var(--red); }
+.score-icon { color: var(--amber); }
+
+.kpi-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.kpi-bar-wrap {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.kpi-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+.income-bar { background: var(--green); }
+.expense-bar { background: var(--red); }
+
+.kpi-sub {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 4px;
+}
+
+.kpi-income { border-top: 2px solid var(--green); }
+.kpi-expense { border-top: 2px solid var(--red); }
+.kpi-balance { border-top: 2px solid var(--accent); }
+.kpi-score { border-top: 2px solid var(--amber); }
+
+/* ═══════════════════════════════════════════════
+   CARDS
+   ═══════════════════════════════════════════════ */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.card-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 /* ═══════════════════════════════════════════════
-   FILTERS
+   CHARTS ROW
    ═══════════════════════════════════════════════ */
-function resetTxFilters() {
-  state.filters = { type:'all', cat:'all', sort:'date-desc', search:'' };
-  // Reset pill UI for type filter
-  document.querySelectorAll('#page-transactions .filter-bar [data-filter="type"]').forEach((p,i) => {
-    p.classList.toggle('active', p.dataset.value === 'all');
-  });
-  const search = document.getElementById('txSearch');
-  if (search) search.value = '';
-  const sortSel = document.getElementById('sortFilter');
-  if (sortSel) sortSel.value = 'date-desc';
+.charts-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
-function setFilter(key, val, el) {
-  state.filters[key] = val;
-  if (el) {
-    const g = el.closest('.pill-group');
-    if (g) g.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
-    el.classList.add('active');
-  }
-  renderTransactions();
+.chart-wrap {
+  position: relative;
+  width: 100%;
 }
 
-function getFilteredTx() {
-  let tx = [...state.transactions];
-  if (state.filters.type!=='all')  tx = tx.filter(t=>t.type===state.filters.type);
-  if (state.filters.cat!=='all')   tx = tx.filter(t=>t.cat===state.filters.cat);
-  if (state.filters.search) {
-    const q = state.filters.search.toLowerCase();
-    tx = tx.filter(t=>t.desc.toLowerCase().includes(q)||t.cat.toLowerCase().includes(q));
-  }
-  switch(state.filters.sort) {
-    case 'date-asc':  tx.sort((a,b)=>a.date.localeCompare(b.date)); break;
-    case 'date-desc': tx.sort((a,b)=>b.date.localeCompare(a.date)); break;
-    case 'amt-desc':  tx.sort((a,b)=>b.amt-a.amt); break;
-    case 'amt-asc':   tx.sort((a,b)=>a.amt-b.amt); break;
-  }
-  return tx;
+.chart-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-function updateCatFilter() {
-  const sel = document.getElementById('catFilter');
-  if (!sel) return;
-  const cats = [...new Set(state.transactions.map(t=>t.cat))].sort();
-  sel.innerHTML = '<option value="all">Alle categorieën</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
-  // Houd de huidige filterselectie zichtbaar in de dropdown
-  sel.value = state.filters.cat;
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* DONUT */
+.donut-wrap {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 14px;
+}
+
+.donut-wrap canvas { width: 160px !important; height: 160px !important; }
+
+.donut-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut-total {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.donut-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text3);
+}
+
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.donut-leg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.donut-leg-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text2);
+}
+
+.donut-leg-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.donut-leg-amt {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
 }
 
 /* ═══════════════════════════════════════════════
-   BUDGET
+   BOTTOM ROW
    ═══════════════════════════════════════════════ */
-function saveBudget() {
-  const cat   = document.getElementById('budgetCat').value;
-  const limit = parseFloat(document.getElementById('budgetLimit').value);
-  if (!cat||isNaN(limit)||limit<=0) return;
-  state.budgets[cat] = limit;
-  saveState(); closeModal(); renderBudgets();
-}
-function deleteBudget(cat) { delete state.budgets[cat]; saveState(); renderBudgets(); }
-
-/* ═══════════════════════════════════════════════
-   GOALS
-   ═══════════════════════════════════════════════ */
-function renderGoalColorPicker() {
-  document.getElementById('goalColorPicker').innerHTML = GOAL_COLORS.map(c=>
-    `<div class="color-swatch${c===state.selectedGoalColor?' selected':''}" style="background:${c}" onclick="selectGoalColor('${c}',this)"></div>`
-  ).join('');
-}
-function selectGoalColor(color, el) {
-  state.selectedGoalColor = color;
-  document.querySelectorAll('#goalColorPicker .color-swatch').forEach(s=>s.classList.remove('selected'));
-  el.classList.add('selected');
-}
-function saveGoal() {
-  const name   = document.getElementById('goalName').value.trim();
-  const target = parseFloat(document.getElementById('goalTarget').value);
-  const saved  = parseFloat(document.getElementById('goalSaved').value)||0;
-  const date   = document.getElementById('goalDate').value;
-  if (!name||isNaN(target)||target<=0) return;
-  state.goals.push({ id:Date.now(), name, target, saved, date, color:state.selectedGoalColor });
-  saveState(); closeModal(); renderGoals();
-}
-function deleteGoal(id) { state.goals=state.goals.filter(g=>g.id!==id); saveState(); renderGoals(); }
-
-/* ═══════════════════════════════════════════════
-   SAVINGS ACCOUNTS
-   ═══════════════════════════════════════════════ */
-let selectedSavingsColor = '#34d48a';
-
-function renderSavingsColorPicker() {
-  const wrap = document.getElementById('savAccColorPicker');
-  if (!wrap) return;
-  wrap.innerHTML = SAVINGS_COLORS.map(c=>
-    `<div class="color-swatch${c===selectedSavingsColor?' selected':''}" style="background:${c}" onclick="selectSavingsColor('${c}',this)"></div>`
-  ).join('');
+.bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 14px;
 }
 
-function selectSavingsColor(color, el) {
-  selectedSavingsColor = color;
-  document.querySelectorAll('#savAccColorPicker .color-swatch').forEach(s=>s.classList.remove('selected'));
-  el.classList.add('selected');
+/* HEALTH */
+.health-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-function saveSavingsAccount() {
-  const name    = document.getElementById('savAccName').value.trim();
-  const balance = parseFloat(document.getElementById('savAccBalance').value)||0;
-  const target  = parseFloat(document.getElementById('savAccTarget').value)||0;
-  const note    = document.getElementById('savAccNote').value.trim();
-  if (!name) { document.getElementById('savAccName').focus(); return; }
-  state.savings.accounts.push({ id:Date.now(), name, balance, target, color:selectedSavingsColor, note });
-  saveState(); closeModal(); renderSavings();
+.health-ring-wrap {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
 }
 
-function deleteSavingsAccount(id) {
-  if (!confirm('Rekening en alle bijbehorende mutaties verwijderen?')) return;
-  state.savings.accounts = state.savings.accounts.filter(a=>a.id!==id);
-  state.savings.transactions = state.savings.transactions.filter(t=>t.accountId!==id);
-  saveState(); renderSavings();
+.health-svg { width: 100px; height: 100px; }
+
+.ring-bg { stroke: var(--border-strong); fill: none; stroke-width: 7; }
+
+.ring-fill {
+  fill: none;
+  stroke-width: 7;
+  stroke: var(--green);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1), stroke 0.4s ease;
 }
 
-function openSavingsTxModal(accountId) {
-  document.getElementById('savTxAccountId').value = accountId;
-  document.getElementById('savTxDate').value = today();
-  document.getElementById('savTxDesc').value = '';
-  document.getElementById('savTxAmt').value = '';
-  setSavTxType('deposit');
-  openModal('addSavingsTx');
+.health-center {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
 }
 
-let currentSavTxType = 'deposit';
-function setSavTxType(type) {
-  currentSavTxType = type;
-  ['deposit','withdrawal','interest'].forEach(t=>{
-    const btn = document.getElementById('savTxBtn_'+t);
-    if (btn) btn.classList.toggle('active', t===type);
-  });
+.health-score {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
 }
 
-function saveSavingsTx() {
-  const accountId = parseInt(document.getElementById('savTxAccountId').value);
-  const amt  = parseFloat(document.getElementById('savTxAmt').value);
-  const date = document.getElementById('savTxDate').value||today();
-  const desc = document.getElementById('savTxDesc').value.trim()||
-    (currentSavTxType==='deposit'?'Storting':currentSavTxType==='withdrawal'?'Opname':'Rente');
-  if (isNaN(amt)||amt<=0) { document.getElementById('savTxAmt').focus(); return; }
-
-  const account = state.savings.accounts.find(a=>a.id===accountId);
-  if (!account) return;
-  if (currentSavTxType==='deposit'||currentSavTxType==='interest') account.balance += amt;
-  else account.balance = Math.max(0, account.balance - amt);
-
-  state.savings.transactions.push({ id:Date.now(), accountId, type:currentSavTxType, amt, date, desc });
-  saveState(); closeModal(); renderSavings();
+.health-max {
+  font-size: 10px;
+  color: var(--text3);
 }
 
-function renderSavings() {
-  const accs = state.savings.accounts;
-  const grid = document.getElementById('savingsAccountGrid');
-  const txList = document.getElementById('savingsTxList');
-  const totalEl = document.getElementById('savingsTotalBalance');
-  const totalTarget = document.getElementById('savingsTotalTarget');
-  const totalPct = document.getElementById('savingsTotalPct');
+.health-breakdown { flex: 1; }
 
-  const totalBal = accs.reduce((a,acc)=>a+acc.balance,0);
-  const totalTgt = accs.reduce((a,acc)=>a+(acc.target||0),0);
-  const overallPct = totalTgt>0 ? Math.min(100,Math.round((totalBal/totalTgt)*100)) : null;
-
-  if (totalEl) totalEl.textContent = fmt(totalBal);
-  if (totalTarget) totalTarget.textContent = totalTgt>0 ? 'van '+fmt(totalTgt)+' doel' : 'totaal spaarsaldo';
-  if (totalPct) totalPct.textContent = overallPct!==null ? overallPct+'%' : '—';
-
-  // Render savings chart
-  renderSavingsChart(accs);
-
-  if (!accs.length) {
-    grid.innerHTML = `<div class="empty-card">
-      <div class="empty-icon">🏦</div>
-      <div class="empty-title">Nog geen spaarrekeningen</div>
-      <div class="empty-sub">Voeg je spaarrekeningen toe om je spaarsaldo bij te houden.</div>
-      <button class="btn-primary" onclick="openModal('addSavingsAccount')">Rekening toevoegen</button>
-    </div>`;
-  } else {
-    grid.innerHTML = accs.map(acc=>{
-      const pct = acc.target>0 ? Math.min(100,Math.round((acc.balance/acc.target)*100)) : null;
-      const { start: cStart, end: cEnd } = getCurrentCycleRange();
-      const cStartStr = dateToStr(cStart), cEndStr = dateToStr(cEnd);
-      const monthlyTxs = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date>=cStartStr&&t.date<=cEndStr);
-      const monthNet = monthlyTxs.reduce((a,t)=>a+(t.type==='withdrawal'?-t.amt:t.amt),0);
-      return `<div class="savings-acc-card" style="border-top:3px solid ${acc.color}">
-        <div class="savings-acc-header">
-          <div>
-            <div class="savings-acc-name">${acc.name}</div>
-            ${acc.note?`<div class="savings-acc-note">${acc.note}</div>`:''}
-          </div>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn-primary-sm" onclick="openSavingsTxModal(${acc.id})">+ Mutatie</button>
-            <button class="budget-del-btn" onclick="deleteSavingsAccount(${acc.id})">×</button>
-          </div>
-        </div>
-        <div class="savings-acc-balance" style="color:${acc.color}">${fmt(acc.balance)}</div>
-        ${acc.target>0?`
-          <div class="savings-acc-target">Doel: ${fmt(acc.target)}</div>
-          <div class="budget-bar-track" style="margin:8px 0 4px">
-            <div class="budget-bar-fill" style="width:${pct}%;background:${acc.color}"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)">
-            <span>${pct}% behaald</span>
-            <span>${pct<100?fmt(acc.target-acc.balance)+' te gaan':'🎉 Doel behaald!'}</span>
-          </div>`:''
-        }
-        <div class="savings-acc-month">
-          <span>Deze maand:</span>
-          <span style="color:${monthNet>=0?'var(--green)':'var(--red)'};font-weight:600">${monthNet>=0?'+':''}${fmt(monthNet)}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  // Recent savings transactions
-  const allTx = [...state.savings.transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,20);
-  if (!txList) return;
-  if (!allTx.length) {
-    txList.innerHTML = '<div class="empty-state">Nog geen mutaties</div>';
-  } else {
-    txList.innerHTML = `
-      <table class="tx-table">
-        <thead><tr><th>Datum</th><th>Rekening</th><th>Omschrijving</th><th>Type</th><th class="right">Bedrag</th><th></th></tr></thead>
-        <tbody>${allTx.map(t=>{
-          const acc = state.savings.accounts.find(a=>a.id===t.accountId);
-          const accName = acc?acc.name:'?';
-          const accColor = acc?acc.color:'#94a3b8';
-          const isPos = t.type!=='withdrawal';
-          const typeLabel = t.type==='deposit'?'Storting':t.type==='withdrawal'?'Opname':'Rente';
-          const typeColor = t.type==='deposit'?'var(--green)':t.type==='interest'?'var(--accent)':'var(--red)';
-          return `<tr>
-            <td class="tx-date-cell">${new Date(t.date).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'})}</td>
-            <td><span class="tx-cat-badge"><span class="tx-cat-dot" style="background:${accColor}"></span>${accName}</span></td>
-            <td>${t.desc}</td>
-            <td><span class="tx-type-badge" style="background:${typeColor}22;color:${typeColor}">${typeLabel}</span></td>
-            <td class="tx-amount-cell"><span class="tx-amount ${isPos?'income':'expense'}">${isPos?'+':'−'}${fmt(t.amt)}</span></td>
-            <td><button class="tx-del-btn" onclick="deleteSavingsTx(${t.id})">×</button></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>`;
-  }
+.health-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
 }
 
-function deleteSavingsTx(id) {
-  const tx = state.savings.transactions.find(t=>t.id===id);
-  if (!tx) return;
-  const acc = state.savings.accounts.find(a=>a.id===tx.accountId);
-  if (acc) {
-    if (tx.type==='deposit'||tx.type==='interest') acc.balance = Math.max(0,acc.balance-tx.amt);
-    else acc.balance += tx.amt;
-  }
-  state.savings.transactions = state.savings.transactions.filter(t=>t.id!==id);
-  saveState(); renderSavings();
+.health-item:last-child { border-bottom: none; }
+
+.health-item-name { color: var(--text2); }
+.health-item-pts {
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
 }
 
-function renderSavingsChart(accs) {
-  const ctx = document.getElementById('savingsChart');
-  if (!ctx) return;
-  if (charts.savings) charts.savings.destroy();
-  if (!accs.length) return;
+/* RECENT TX */
+.tx-mini-list { display: flex; flex-direction: column; gap: 6px; }
 
-  // Bouw saldo-verloop over de laatste 6 budgetcycli i.p.v. kalendermaanden
-  const cycles = getLastNCycles(6);
+.tx-mini-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  font-size: 12px;
+  transition: background var(--transition);
+}
 
-  const { grid, text } = chartColors();
+.tx-mini-row:hover { background: var(--bg); }
 
-  // Total balance trend (simulated by adding up all deposits - withdrawals up to each cycle end)
-  const datasets = accs.map(acc=>{
-    const data = cycles.map(c=>{
-      const endStr = dateToStr(c.end);
-      const txsUpTo = state.savings.transactions.filter(t=>t.accountId===acc.id&&t.date<=endStr);
-      const bal = txsUpTo.reduce((sum,t)=>sum+(t.type==='withdrawal'?-t.amt:t.amt),0);
-      return Math.round(bal*100)/100;
-    });
-    return { label:acc.name, data, borderColor:acc.color, backgroundColor:acc.color+'22', tension:0.4, fill:true, pointRadius:4, pointBackgroundColor:acc.color };
-  });
+.tx-mini-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
-  charts.savings = new Chart(ctx.getContext('2d'),{
-    type:'line',
-    data:{ labels:cycles.map(c=>c.label), datasets },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:accs.length>1, labels:{ color:text, font:{size:11}, boxWidth:10 } }, tooltip:{ callbacks:{ label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL') }}},
-      scales:{
-        x:{ grid:{display:false}, ticks:{color:text,font:{size:11}} },
-        y:{ grid:{color:grid}, ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')} }
-      }
-    }
-  });
+.tx-mini-name { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-mini-cat { font-size: 10px; color: var(--text3); white-space: nowrap; }
+.tx-mini-amt {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* BURN */
+.burn-stats {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  margin-bottom: 18px;
+  gap: 6px;
+}
+
+.burn-stat {
+  text-align: center;
+  flex: 1;
+  padding: 10px 8px;
+  background: var(--bg3);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.burn-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text3);
+  order: -1;
+}
+
+.burn-val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.burn-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+}
+
+.projection-bar-wrap { }
+
+.proj-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text3);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.proj-track {
+  height: 6px;
+  background: var(--bg3);
+  border-radius: 3px;
+  overflow: visible;
+  position: relative;
+  margin-bottom: 5px;
+}
+
+.proj-fill {
+  height: 100%;
+  background: var(--red);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+  max-width: 100%;
+}
+
+.proj-marker {
+  position: absolute;
+  top: -3px;
+  width: 12px; height: 12px;
+  background: var(--amber);
+  border-radius: 50%;
+  margin-left: -6px;
+  border: 2px solid var(--bg2);
+  transition: left 0.6s ease;
+}
+
+.proj-values {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
 }
 
 /* ═══════════════════════════════════════════════
-   CSV IMPORT — FIXED
+   FILTER BAR
    ═══════════════════════════════════════════════ */
-const BANK_PRESETS = {
-  ing:     { date:'Datum',              desc:'Naam / Omschrijving', amt:'Bedrag (EUR)', type:'Af Bij' },
-  rabo:    { date:'Datum',              desc:'Omschrijving',         amt:'Bedrag',       type:'Debet/Credit' },
-  abn:     { date:'Transactiedatum',    desc:'Omschrijving',         amt:'Bedrag',       type:'Mutatiecode' },
-  sns:     { date:'Boekingsdatum',      desc:'Omschrijving',         amt:'Bedrag',       type:'Af/Bij' },
-  generic: { date:'', desc:'', amt:'', type:'' },
-  auto:    { date:'', desc:'', amt:'', type:'' },
-};
-
-function selectBank(bank, el) {
-  selectedBank = bank;
-  document.querySelectorAll('#modal-importCSV .pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
+.filter-bar {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
 }
 
-function resetCSVModal() {
-  csvStep = 1;
-  csvParsed = { headers:[], rows:[], mapping:{}, finalRows:[] };
-  selectedBank = 'auto';
-  document.getElementById('csvStep1').style.display = '';
-  document.getElementById('csvStep2').style.display = 'none';
-  document.getElementById('csvStep3').style.display = 'none';
-  document.getElementById('csvNextBtn').style.display = 'none';
-  const fi = document.getElementById('csvFileInput');
-  if (fi) fi.value = '';
-  // Reset bank pills
-  document.querySelectorAll('#modal-importCSV .pill').forEach((p,i)=>p.classList.toggle('active',i===0));
-  const dz = document.getElementById('csvDropzone');
-  if (dz) {
-    dz.ondragover = e=>{ e.preventDefault(); dz.classList.add('drag-over'); };
-    dz.ondragleave = ()=>dz.classList.remove('drag-over');
-    dz.ondrop = e=>{ e.preventDefault(); dz.classList.remove('drag-over'); if(e.dataTransfer.files[0]) handleCSVFile(e.dataTransfer.files[0]); };
-  }
+.filter-group { display: flex; flex-direction: column; gap: 5px; }
+.filter-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); font-weight: 600; }
+
+.filter-select {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 6px 10px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition);
 }
 
-function handleCSVFile(file) {
-  if (!file) return;
-  // Try UTF-8 first, fall back to latin-1 (covers ISO-8859-1 bank exports)
-  const reader = new FileReader();
-  reader.onload = e => parseCSV(e.target.result);
-  reader.onerror = () => {
-    const r2 = new FileReader();
-    r2.onload = e => parseCSV(e.target.result);
-    r2.readAsText(file, 'ISO-8859-1');
-  };
-  reader.readAsText(file, 'UTF-8');
+.filter-select:focus { border-color: var(--accent); }
+
+.filter-search {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 6px 12px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  outline: none;
+  width: 200px;
+  transition: border-color var(--transition);
 }
 
-/* ── Proper CSV line parser (handles escaped quotes, all delimiters) ── */
-function parseCSVLine(line, delim) {
-  const result = [];
-  let cur = '', inQuote = false, i = 0;
-  while (i < line.length) {
-    const ch = line[i];
-    if (inQuote) {
-      if (ch==='"' && line[i+1]==='"') { cur+='"'; i+=2; continue; } // escaped quote
-      if (ch==='"') { inQuote=false; i++; continue; }
-      cur += ch;
-    } else {
-      if (ch==='"') { inQuote=true; i++; continue; }
-      if (ch===delim) { result.push(cur.trim()); cur=''; i++; continue; }
-      cur += ch;
-    }
-    i++;
-  }
-  result.push(cur.trim());
-  return result;
+.filter-search:focus { border-color: var(--accent); }
+.filter-search::placeholder { color: var(--text3); }
+.search-group { flex: 1; min-width: 160px; }
+
+/* PILLS */
+.pill-group { display: flex; gap: 4px; }
+
+.pill {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: 'Inter', sans-serif;
 }
 
-/* ── Detect delimiter by counting occurrences outside quotes ── */
-function detectDelimiter(line) {
-  const candidates = [';', ',', '\t', '|'];
-  let best = ',', bestCount = 0;
-  candidates.forEach(d => {
-    let count = 0, inQ = false;
-    for (const ch of line) {
-      if (ch==='"') { inQ=!inQ; continue; }
-      if (!inQ && ch===d) count++;
-    }
-    if (count > bestCount) { bestCount=count; best=d; }
-  });
-  return best;
+.pill:hover { border-color: var(--accent); color: var(--accent); }
+.pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════
+   TRANSACTION TABLE
+   ═══════════════════════════════════════════════ */
+.tx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
 }
 
-/* ── Parse amount string robustly (handles 1.234,56 and 1,234.56 and -1.23) ── */
-function parseAmount(raw) {
-  if (!raw) return 0;
-  // Strip currency symbols and whitespace
-  let s = raw.replace(/[€$£\s]/g,'').trim();
-  // Detect format: if both . and , present, the last one is decimal separator
-  const lastDot   = s.lastIndexOf('.');
-  const lastComma = s.lastIndexOf(',');
-  if (lastDot > -1 && lastComma > -1) {
-    if (lastComma > lastDot) {
-      // Format: 1.234,56 → European
-      s = s.replace(/\./g,'').replace(',','.');
-    } else {
-      // Format: 1,234.56 → Anglo
-      s = s.replace(/,/g,'');
-    }
-  } else if (lastComma > -1) {
-    // Only comma — treat as decimal if ≤2 digits follow it, else thousands
-    const afterComma = s.slice(lastComma+1);
-    if (afterComma.length <= 2) s = s.replace(',','.');
-    else s = s.replace(',','');
-  }
-  return parseFloat(s) || 0;
+.tx-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+  padding: 0 12px 12px;
+  border-bottom: 1px solid var(--border);
 }
 
-function parseCSV(text) {
-  // Strip BOM
-  if (text.charCodeAt(0)===0xFEFF) text = text.slice(1);
+.tx-table th.right { text-align: right; }
 
-  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
-  if (!lines.length) { alert('Leeg bestand.'); return; }
-
-  const delim = detectDelimiter(lines[0]);
-  const headers = parseCSVLine(lines[0], delim);
-  const rows = lines.slice(1)
-    .map(l=>parseCSVLine(l,delim))
-    .filter(r=>r.length>=2 && r.some(v=>v));
-
-  csvParsed.headers = headers;
-  csvParsed.rows    = rows;
-  csvParsed.delim   = delim;
-
-  document.getElementById('csvRowCount').textContent = rows.length;
-
-  // Auto-map columns
-  const preset = BANK_PRESETS[selectedBank]||{};
-  const mapping = {};
-  const KEYWORDS = {
-    date: ['datum','date','boekdatum','transactiedatum','boekingsdatum','valuedate','booking date'],
-    desc: ['omschrijving','naam','naam / omschrijving','description','mededelingen','name/omschrijving'],
-    amt:  ['bedrag (eur)','bedrag','amount','mutatie','credit','debet'],
-    type: ['af bij','af/bij','debet/credit','mutatiecode','bij/af','credit/debet','dc','type']
-  };
-
-  ['date','desc','amt','type'].forEach(f=>{
-    if (preset[f] && headers.some(h=>h===preset[f])) { mapping[f]=preset[f]; return; }
-    const found = headers.find(h=>KEYWORDS[f].some(k=>h.toLowerCase().trim()===k));
-    if (found) { mapping[f]=found; return; }
-    const partial = headers.find(h=>KEYWORDS[f].some(k=>h.toLowerCase().includes(k)));
-    if (partial) mapping[f]=partial;
-  });
-
-  csvParsed.mapping = mapping;
-  csvStep = 2;
-  document.getElementById('csvStep1').style.display = 'none';
-  document.getElementById('csvStep2').style.display = '';
-  document.getElementById('csvNextBtn').style.display = '';
-  document.getElementById('csvNextBtn').textContent = 'Voorbeeld bekijken →';
-  renderCSVMapGrid();
-  renderCSVRawPreview();
+.tx-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
 }
 
-function renderCSVMapGrid() {
-  const LABELS = { date:'Datum *', desc:'Omschrijving *', amt:'Bedrag *', type:'Type (Af/Bij)' };
-  const options = ['— niet gebruiken —', ...csvParsed.headers];
-  document.getElementById('csvMapGrid').innerHTML = ['date','desc','amt','type'].map(f=>`
-    <div class="csv-map-row">
-      <label class="csv-map-label">${LABELS[f]}</label>
-      <select class="filter-select" id="csvMap_${f}" style="width:100%">
-        ${options.map(o=>`<option value="${o}"${csvParsed.mapping[f]===o?' selected':''}>${o}</option>`).join('')}
-      </select>
-    </div>`).join('');
+.tx-table tr:last-child td { border-bottom: none; }
+.tx-table tbody tr { transition: background var(--transition); }
+.tx-table tbody tr:hover { background: var(--bg3); }
+
+.tx-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg3);
+  color: var(--text2);
 }
 
-function renderCSVRawPreview() {
-  const preview = csvParsed.rows.slice(0,5);
-  document.getElementById('csvPreviewTable').innerHTML =
-    `<thead><tr>${csvParsed.headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>`+
-    `<tbody>${preview.map(r=>`<tr>${csvParsed.headers.map((_,i)=>`<td>${r[i]||'—'}</td>`).join('')}</tr>`).join('')}</tbody>`;
+.tx-cat-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
 }
 
-function csvNext() {
-  if (csvStep===2) {
-    // Read mapping from dropdowns
-    const IGNORE = '— niet gebruiken —';
-    ['date','desc','amt','type'].forEach(f=>{
-      const sel=document.getElementById('csvMap_'+f);
-      csvParsed.mapping[f] = sel&&sel.value!==IGNORE ? sel.value : '';
-    });
-    if (!csvParsed.mapping.date||!csvParsed.mapping.desc||!csvParsed.mapping.amt) {
-      alert('Koppel minimaal: Datum, Omschrijving en Bedrag.'); return;
-    }
-    buildFinalPreview();
-    csvStep=3;
-    document.getElementById('csvStep2').style.display='none';
-    document.getElementById('csvStep3').style.display='';
-    document.getElementById('csvNextBtn').textContent='✓ Importeren';
-  } else if (csvStep===3) {
-    doImport();
-  }
+.tx-amount-cell { text-align: right; }
+
+.tx-amount {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-function buildFinalPreview() {
-  const { headers, rows, mapping } = csvParsed;
-  const hi = k => mapping[k] ? headers.indexOf(mapping[k]) : -1;
+.tx-amount.income { color: var(--green); }
+.tx-amount.expense { color: var(--red); }
 
-  const parsed = rows.map((r,rowIdx)=>{
-    const dateRaw = hi('date')>=0 ? r[hi('date')]||'' : '';
-    const desc    = hi('desc')>=0 ? r[hi('desc')]||'' : '';
-    const amtRaw  = hi('amt') >=0 ? r[hi('amt')] ||'0' : '0';
-    const typeRaw = hi('type')>=0 ? r[hi('type')]||'' : '';
+.tx-date-cell { color: var(--text2); font-size: 12px; }
 
-    // Parse amount — preserves sign for type detection
-    const amtSigned = parseAmount(amtRaw);
-    const amt = Math.abs(amtSigned);
+.tx-actions { text-align: right; }
 
-    // Determine income/expense
-    let type = 'expense';
-    const tl = typeRaw.toLowerCase().trim();
-    if      (tl==='bij'||tl==='credit'||tl==='c'||tl==='cr'||tl==='b') type='income';
-    else if (tl==='af' ||tl==='debet' ||tl==='d'||tl==='db'||tl==='a') type='expense';
-    else if (!mapping.type) {
-      // Fallback: positive = income, negative = expense
-      type = amtSigned>=0 ? 'income' : 'expense';
-    }
-
-    // Parse date — handles YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, YYYYMMDD, D-M-YYYY
-    let date = today();
-    const dClean = dateRaw.replace(/\//g,'-').replace(/\./g,'-').trim();
-    if      (/^\d{4}-\d{2}-\d{2}$/.test(dClean)) { date=dClean; }
-    else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dClean)) { const p=dClean.split('-'); date=`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`; }
-    else if (/^\d{8}$/.test(dateRaw)) { date=`${dateRaw.slice(0,4)}-${dateRaw.slice(4,6)}-${dateRaw.slice(6,8)}`; }
-
-    return { _rowIdx:rowIdx, date, desc, amt, type, cat:type==='income'?'Inkomst':'Overig' };
-  }).filter(r=>r.amt>0 && r.desc.trim());
-
-  csvParsed.finalRows = parsed;
-
-  const inc = parsed.filter(r=>r.type==='income').reduce((a,r)=>a+r.amt,0);
-  const exp = parsed.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amt,0);
-  const skipped = csvParsed.rows.length - parsed.length;
-
-  document.getElementById('csvImportSummary').innerHTML = `
-    <span class="csv-sum-item"><strong>${parsed.length}</strong> transacties</span>
-    <span class="csv-sum-item">Inkomsten: <strong style="color:var(--green)">${fmt(inc)}</strong></span>
-    <span class="csv-sum-item">Uitgaven: <strong style="color:var(--red)">${fmt(exp)}</strong></span>
-    ${skipped>0?`<span class="csv-sum-item" style="color:var(--text3)">${skipped} rijen overgeslagen</span>`:''}`;
-
-  document.getElementById('csvFinalTable').innerHTML =
-    `<thead><tr><th>Datum</th><th>Omschrijving</th><th>Type</th><th>Bedrag</th><th>Categorie</th></tr></thead>`+
-    `<tbody>${parsed.slice(0,100).map((r,i)=>`
-      <tr>
-        <td>${r.date}</td>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.desc}">${r.desc}</td>
-        <td><span class="tx-type-badge ${r.type}">${r.type==='income'?'Inkomst':'Uitgave'}</span></td>
-        <td style="font-family:'Space Grotesk',sans-serif;font-weight:600;color:${r.type==='income'?'var(--green)':'var(--red)'}">${fmt(r.amt)}</td>
-        <td>
-          <select class="filter-select" style="font-size:11px;padding:3px 6px" onchange="csvParsed.finalRows[${i}].cat=this.value">
-            ${state.categories.map(c=>`<option value="${c.name}"${r.cat===c.name?' selected':''}>${c.emoji} ${c.name}</option>`).join('')}
-          </select>
-        </td>
-      </tr>`).join('')}
-    </tbody>`;
+.tx-del-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: color var(--transition), background var(--transition);
+  line-height: 1;
 }
 
-function doImport() {
-  const rows = csvParsed.finalRows||[];
-  if (!rows.length) { alert('Geen geldige transacties gevonden.'); return; }
-  let count = 0;
-  rows.forEach(r=>{
-    state.transactions.push({ id:Date.now()+Math.random(), type:r.type, desc:r.desc, amt:r.amt, date:r.date, cat:r.cat, note:'', fromAccount:'', toAccount:'' });
-    count++;
-  });
-  saveState(); closeModal(); updateCatFilter(); navigate('transactions');
-  const toast=document.createElement('div');
-  toast.textContent=`✓ ${count} transacties geïmporteerd`;
-  Object.assign(toast.style,{position:'fixed',bottom:'24px',right:'24px',background:'var(--green)',color:'#fff',padding:'10px 18px',borderRadius:'8px',fontFamily:"'Space Grotesk',sans-serif",fontWeight:'600',fontSize:'13px',zIndex:'9999'});
-  document.body.appendChild(toast);
-  setTimeout(()=>toast.remove(),3000);
+.tx-del-btn:hover { color: var(--red); background: var(--red-dim); }
+
+.tx-summary {
+  display: flex;
+  gap: 20px;
+  padding: 12px 20px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: 12px;
+  font-size: 13px;
 }
+
+.tx-summary-item { color: var(--text2); }
+.tx-summary-item strong {
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════
+   ANALYTICS
+   ═══════════════════════════════════════════════ */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.analytics-card-wide { grid-column: 1 / -1; }
+
+.period-switcher { display: flex; gap: 4px; }
+
+/* INSIGHTS */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.insight-tile {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.insight-icon { font-size: 20px; margin-bottom: 8px; }
+.insight-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.insight-body { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.insight-tile.good { background: var(--green-dim); border-color: rgba(52,212,138,0.2); }
+.insight-tile.warn { background: var(--amber-dim); border-color: rgba(255,179,64,0.2); }
+.insight-tile.bad { background: var(--red-dim); border-color: rgba(255,94,108,0.2); }
+.insight-tile.info { background: var(--accent-dim); border-color: rgba(108,138,255,0.2); }
+
+/* ═══════════════════════════════════════════════
+   BUDGET PAGE
+   ═══════════════════════════════════════════════ */
+.budget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.budget-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+.budget-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.budget-cat-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.budget-cat-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+
+.budget-pct-badge {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.budget-pct-badge.ok { background: var(--green-dim); color: var(--green); }
+.budget-pct-badge.warn { background: var(--amber-dim); color: var(--amber); }
+.budget-pct-badge.over { background: var(--red-dim); color: var(--red); }
+
+.budget-amounts {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+.budget-spent {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.budget-bar-track {
+  height: 6px;
+  background: var(--bg3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.budget-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.budget-del-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  transition: color var(--transition);
+}
+
+.budget-del-btn:hover { color: var(--red); }
+
+/* ═══════════════════════════════════════════════
+   GOALS PAGE
+   ═══════════════════════════════════════════════ */
+.goals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.goal-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.goal-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.goal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.goal-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.goal-date {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.goal-pct {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.goal-amounts {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 12px;
+}
+
+.goal-bar-track {
+  height: 8px;
+  background: var(--bg3);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.goal-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.7s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+.goal-monthly {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.goal-monthly strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.goal-del-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  transition: color var(--transition);
+}
+
+.goal-del-btn:hover { color: var(--red); }
 
 /* ═══════════════════════════════════════════════
    SETTINGS
    ═══════════════════════════════════════════════ */
-function setTheme(theme) {
-  state.settings.theme=theme;
-  document.documentElement.setAttribute('data-theme',theme);
-  document.getElementById('themeLight').classList.toggle('active',theme==='light');
-  document.getElementById('themeDark').classList.toggle('active',theme==='dark');
-  saveState();
-  setTimeout(()=>{ Object.values(charts).forEach(c=>{if(c)c.destroy();}); charts={}; renderDashboard(); try{renderAnalytics();}catch(e){} try{renderSavings();}catch(e){} },50);
-}
-function setCurrency(sym) { state.settings.currency=sym; document.querySelectorAll('.currency-symbol').forEach(el=>el.textContent=sym); saveState(); renderDashboard(); }
-function saveIncome() { const v=parseFloat(document.getElementById('incomeInput').value); if(v>0){state.settings.monthlyIncome=v;saveState();renderDashboard();} }
-
-function saveCycleStart() {
-  const v = parseInt(document.getElementById('cycleStartInput').value);
-  if (v >= 1 && v <= 28) {
-    state.settings.cycleStartDay = v;
-    saveState();
-    renderDashboard();
-    showToast(`Budgetcyclus ingesteld: start op dag ${v}`, 'success');
-  } else {
-    showToast('Kies een dag tussen 1 en 28', 'warn');
-  }
-}
-function exportCSV() {
-  const rows=[['Datum','Omschrijving','Categorie','Type','Bedrag','Van','Naar','Notitie']];
-  [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>rows.push([t.date,t.desc,t.cat,t.type,t.amt.toFixed(2),t.fromAccount||'',t.toAccount||'',t.note||'']));
-  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
-  a.download='budgetflow-export.csv'; a.click();
-}
-function clearAllData() {
-  if(!confirm('Alles wissen inclusief spaarrekeningen?'))return;
-  state.transactions=[]; state.budgets={}; state.goals=[]; state.savings={accounts:[],transactions:[]};
-  saveState(); navigate('dashboard');
-}
-/* ═══════════════════════════════════════════════
-   COMPUTE METRICS
-   ═══════════════════════════════════════════════ */
-function getCurrentMonthTx() {
-  const { start, end } = getCurrentCycleRange();
-  const startStr = dateToStr(start);
-  const endStr = dateToStr(end);
-  return state.transactions.filter(t => t.date >= startStr && t.date <= endStr);
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
-function computeMetrics() {
-  const tx=getCurrentMonthTx();
-  const income  =tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-  const expense =tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const transfer=tx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0);
-  const balance =income-expense;
-  const cats={};
-  tx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  const dayProgress = Math.max(1, getCycleDayProgress());
-  const totalDays = getCycleTotalDays();
+.settings-card { }
 
-  /* ── Slimme projectie ──
-     Splits uitgaven in vaste lasten (die één keer per cyclus komen)
-     en variabele uitgaven (die per dag doorgaan). De projectie is dan:
-     al betaalde vaste lasten + nog verwachte vaste lasten (uit terugkerende
-     transacties) + variabele burn-rate doorgetrokken naar het einde. */
-  const fixedCatsSet = new Set(['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening']);
-  const fixedSpent    = tx.filter(t=>t.type==='expense'&&fixedCatsSet.has(t.cat)).reduce((a,t)=>a+t.amt,0);
-  const variableSpent = expense - fixedSpent;
-  const variableDaily = variableSpent / dayProgress;
+.settings-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 16px;
+}
 
-  // Verwachte nog-niet-betaalde terugkerende lasten binnen deze cyclus
-  const { start: cycStart, end: cycEnd } = getCurrentCycleRange();
-  const todayStr = today();
-  let upcomingFixed = 0;
-  (state.recurring||[]).filter(r=>r.type==='expense').forEach(r => {
-    // Bepaal de datum van deze terugkerende transactie binnen de cyclus
-    let recDate = new Date(cycStart.getFullYear(), cycStart.getMonth(), Math.min(r.day, 28));
-    if (recDate < cycStart) recDate = new Date(cycStart.getFullYear(), cycStart.getMonth()+1, Math.min(r.day, 28));
-    if (recDate > cycEnd) return; // valt buiten cyclus
-    const recStr = dateToStr(recDate);
-    if (recStr <= todayStr) return; // al geweest — zit in fixedSpent als hij is toegevoegd
-    // Check of hij niet al handmatig is ingevoerd
-    const alreadyIn = tx.some(t=>t.desc===r.desc&&t.amt===r.amt&&t.type==='expense');
-    if (!alreadyIn) upcomingFixed += r.amt;
-  });
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
 
-  const burnDaily = expense / dayProgress;
-  const projected = fixedSpent + upcomingFixed + (variableDaily * totalDays);
-  let score=0; const breakdown=[];
-  if(income>0){
-    const sr=balance/income;
-    let pts=sr>=0.3?35:sr>=0.2?25:sr>=0.1?15:sr>=0?5:0; score+=pts; breakdown.push({name:'Spaarquote',pts,max:35});
-    const er=expense/income;
-    pts=er<=0.6?25:er<=0.75?18:er<=0.9?10:3; score+=pts; breakdown.push({name:'Uitgavenratio',pts,max:25});
-    const hp=(cats['Wonen']||0)/income;
-    pts=hp<=0.3?20:hp<=0.4?14:hp<=0.5?7:0; score+=pts; breakdown.push({name:'Woonlasten',pts,max:20});
-    const nc=Object.keys(cats).length;
-    pts=nc>=4?20:nc>=2?12:nc>=1?6:0; score+=pts; breakdown.push({name:'Diversiteit',pts,max:20});
-  }
-  return{income,expense,transfer,balance,cats,burnDaily,projected,score:Math.min(100,score),breakdown};
+.setting-row:last-child { border-bottom: none; }
+.setting-info { flex: 1; }
+.setting-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+.setting-desc { font-size: 11px; color: var(--text3); }
+
+.inline-input-row { display: flex; gap: 6px; align-items: center; }
+
+.about-block { }
+.about-logo {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.about-logo span { color: var(--accent); }
+
+.about-desc {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.about-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(108,138,255,0.2);
 }
 
 /* ═══════════════════════════════════════════════
-   RENDER DASHBOARD
+   MODALS
    ═══════════════════════════════════════════════ */
-function renderDashboard(){
-  const now=new Date();
-  const userName = state.settings.userName||'';
-  document.getElementById('dashSub').textContent = (userName ? userName + ' · ' : '') + cycleLabel();
-  document.getElementById('sidebarMonth').textContent=cycleLabel();
-  const{income,expense,transfer,balance,cats,burnDaily,projected,score,breakdown}=computeMetrics();
-  const transCount=getCurrentMonthTx().filter(t=>t.type==='transfer').length;
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 300;
+  backdrop-filter: blur(2px);
+}
 
-  document.getElementById('kpiIncome').textContent=fmt(income);
-  document.getElementById('kpiExpense').textContent=fmt(expense);
-  document.getElementById('kpiTransfer').textContent=fmt(transfer);
-  document.getElementById('kpiTransferSub').textContent=transCount+' transfer'+(transCount!==1?'s':'');
-  document.getElementById('kpiBalance').textContent=fmt(Math.abs(balance));
-  document.getElementById('kpiBalance').style.color=balance>=0?'var(--green)':'var(--red)';
-  document.getElementById('kpiBalSub').textContent=income>0?Math.round((balance/income)*100)+'% van inkomsten':'van inkomsten';
-  document.getElementById('kpiExpenseBar').style.width=income>0?Math.min(100,(expense/income)*100)+'%':'0%';
-  document.getElementById('kpiScore').textContent=income>0?score:'—';
-  document.getElementById('kpiScoreLabel').textContent=score>=80?'Uitstekend':score>=60?'Goed':score>=40?'Matig':income>0?'Aandacht':'Voeg data toe';
+.modal-backdrop.open { display: block; }
 
-  renderCashflowChart();
-  renderDonutChart(cats);
+.modal {
+  display: none;
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -48%);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  z-index: 400;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  animation: modalIn 0.18s ease;
+}
 
-  const arc=document.getElementById('healthRing');
-  arc.style.strokeDashoffset=301.6-(301.6*score/100);
-  arc.style.stroke=score>=70?'var(--green)':score>=40?'var(--amber)':'var(--red)';
-  document.getElementById('healthScore').textContent=score;
-  document.getElementById('healthBreakdown').innerHTML=breakdown.map(b=>{
-    const pct=Math.round((b.pts/b.max)*100);
-    const col=pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
-    return `<div class="health-item"><span class="health-item-name">${b.name}</span><span class="health-item-pts" style="color:${col}">${b.pts}/${b.max}</span></div>`;
-  }).join('')||'<div class="empty-state" style="padding:8px;font-size:12px">Voeg data toe</div>';
+@keyframes modalIn {
+  from { transform: translate(-50%, -44%); opacity: 0; }
+  to { transform: translate(-50%, -48%); opacity: 1; }
+}
 
-  const recent=[...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
-  document.getElementById('recentTxList').innerHTML=recent.length?recent.map(t=>{
-    const col=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':catColor(t.cat);
-    const amtCol=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':'var(--red)';
-    const sign=t.type==='income'?'+':t.type==='transfer'?'⇄':'−';
-    return `<div class="tx-mini-row" onclick="editTx(${t.id})" style="cursor:pointer">
-      <span class="tx-mini-dot" style="background:${col}"></span>
-      <span class="tx-mini-name">${t.desc}</span>
-      <span class="tx-mini-cat">${t.cat}</span>
-      <span class="tx-mini-amt" style="color:${amtCol}">${sign}${fmt(t.amt)}</span>
-    </div>`;
-  }).join(''):'<div class="empty-state">Nog geen transacties</div>';
+.modal.open { display: block; }
 
-  document.getElementById('burnDaily').textContent=fmt(burnDaily);
-  document.getElementById('burnWeekly').textContent=fmt(burnDaily*7);
-  document.getElementById('burnProjected').textContent=fmt(projected);
-  const cycleDay=Math.max(1,getCycleDayProgress()), cycleDays=getCycleTotalDays();
-  document.getElementById('projFill').style.width=income>0?Math.min(100,Math.round((projected/income)*100))+'%':'0%';
-  document.getElementById('projMarker').style.left=Math.min(100,Math.round((cycleDay/cycleDays)*100))+'%';
-  document.getElementById('projCurrent').textContent=fmt(expense);
-  document.getElementById('projEnd').textContent=fmt(projected);
-  document.getElementById('txPageSub').textContent=state.transactions.length+' transacties in totaal';
-  renderMonthComparison();
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 6px;
+  transition: color var(--transition), background var(--transition);
+}
+
+.modal-close:hover { color: var(--text); background: var(--bg3); }
+
+.modal-body { padding: 20px 24px; }
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* FORM */
+.type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 18px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+
+.type-btn {
+  flex: 1;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.type-btn.active {
+  background: var(--bg2);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+.form-group { margin-bottom: 14px; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+  margin-bottom: 5px;
+}
+
+.form-input {
+  width: 100%;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 9px 12px;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color var(--transition);
+  appearance: none;
+}
+
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text3); }
+
+.amount-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-symbol {
+  position: absolute;
+  left: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  pointer-events: none;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.amount-input { padding-left: 28px !important; }
+
+.color-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform var(--transition), border-color var(--transition);
+}
+
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.selected { border-color: white; transform: scale(1.1); }
+
+/* ═══════════════════════════════════════════════
+   EMPTY STATES
+   ═══════════════════════════════════════════════ */
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+.empty-card {
+  background: var(--bg2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 40px 24px;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+.empty-icon { font-size: 32px; margin-bottom: 10px; color: var(--text3); }
+.empty-title { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; color: var(--text2); max-width: 280px; margin: 0 auto 16px; line-height: 1.5; }
+
+/* Bottom nav hidden by default — shown only on mobile via media query */
+.bottom-nav { display: none; }
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE — TABLET (≤900px)
+   ═══════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 0px; }
+
+  .sidebar {
+    transform: translateX(calc(-100% - 12px));
+    width: 208px;
+    top: 12px; bottom: 12px; left: 12px;
+  }
+
+  .sidebar.open { transform: translateX(0); }
+
+  .topbar { display: flex; }
+
+  .main {
+    margin-left: 0;
+    max-width: 100vw;
+    padding: 76px 20px 24px;
+  }
+
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .charts-row { grid-template-columns: 1fr; }
+  .bottom-row { grid-template-columns: 1fr; }
+  .analytics-grid { grid-template-columns: 1fr; }
+  .analytics-card-wide { grid-column: 1; }
+  .settings-grid { grid-template-columns: 1fr; }
+  .insights-grid { grid-template-columns: 1fr 1fr; }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .savings-kpi-row { grid-template-columns: 1fr; }
 }
 
 /* ═══════════════════════════════════════════════
-   CHARTS HELPERS
+   MOBILE (≤600px) — bottom nav, thumb-friendly UI
    ═══════════════════════════════════════════════ */
-function chartColors(){
-  return{
-    grid:state.settings.theme==='light'?'rgba(0,0,0,0.05)':'rgba(255,255,255,0.05)',
-    text:state.settings.theme==='light'?'#9090a8':'#5a5a72'
-  };
+@media (max-width: 600px) {
+
+  /* ── CORE LAYOUT ── */
+  .sidebar { display: none !important; }
+  :root { --sidebar-w: 0px !important; }
+
+  body {
+    display: block !important; /* Reset flex so sidebar doesn't affect layout */
+    overflow-x: hidden;
+  }
+
+  .sidebar { display: none !important; }
+
+  .main {
+    margin-left: 0 !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+    padding: 70px 14px 90px !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden;
+  }
+
+  .bottom-nav { display: flex; }
+  .topbar { display: flex; }
+
+  /* ── TOPBAR — clean native feel ── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    height: 56px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .topbar-menu-btn { display: none; }
+  .topbar-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  /* Hide topbar action button on pages where it doesn't belong */
+  .topbar-action { display: none; }
+
+  /* ── PAGE CONTENT ── */
+  /* Hide the big page title/header since topbar handles it */
+  .page-header { display: none; }
+
+  /* ── KPI CARDS — 2 col grid ── */
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .kpi-card {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  /* Budget score spans full width */
+  .kpi-score {
+    grid-column: 1 / -1 !important;
+  }
+
+  .kpi-value { font-size: 20px; }
+  .kpi-label { font-size: 10px; letter-spacing: 0.05em; }
+
+  /* ── CARDS ── */
+  .card {
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 12px;
+  }
+
+  .card-title { font-size: 14px; }
+
+  /* ── CHARTS ── */
+  .charts-row { flex-direction: column; gap: 12px; }
+  .chart-wrap { height: 200px !important; }
+  .donut-wrap { width: 130px; height: 130px; margin: 0 auto 12px; }
+  .donut-wrap canvas { width: 130px !important; height: 130px !important; }
+
+  /* Cashflow legend */
+  .chart-legend { flex-wrap: wrap; gap: 6px; font-size: 11px; }
+
+  /* Cashflow card — prevent overflow */
+  .cashflow-card canvas { max-width: 100%; }
+
+  /* ── HEALTH CARD ── */
+  .health-body { flex-direction: column; gap: 12px; align-items: flex-start; }
+  .health-ring-wrap { width: 80px; height: 80px; }
+  .health-svg { width: 80px; height: 80px; }
+  .health-score { font-size: 20px; }
+
+  /* ── BURN RATE ── */
+  .burn-stats { justify-content: space-between; gap: 8px; }
+  .burn-stat { flex: 1; padding: 10px 6px; }
+  .burn-val { font-size: 14px; }
+
+  /* ── BOTTOM ROW ── */
+  .bottom-row { flex-direction: column; gap: 12px; }
+
+  /* ── TRANSACTIONS ── */
+  /* Hide category and date columns — show only name and amount */
+  .tx-table { font-size: 13px; }
+  .tx-table th:nth-child(2),
+  .tx-table td:nth-child(2) { display: none; }
+  .tx-table th:nth-child(3),
+  .tx-table td:nth-child(3) { display: none; }
+  .tx-amount { font-size: 14px; font-weight: 600; }
+
+  /* ── FILTER BAR ── */
+  .filter-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .filter-bar .type-toggle { order: 1; width: 100%; }
+  .filter-bar .filter-select { order: 2; flex: 1; min-width: 0; }
+  #sortFilter { order: 3; }
+  #txSearch { order: 4; width: 100%; }
+
+  /* ── BUDGET & GOALS GRID ── */
+  .budget-grid { grid-template-columns: 1fr; }
+  .goals-grid  { grid-template-columns: 1fr; }
+
+  /* ── INSIGHTS ── */
+  .insights-grid { grid-template-columns: 1fr; }
+
+  /* ── SETTINGS ── */
+  .settings-grid { grid-template-columns: 1fr; }
+  .setting-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 0;
+  }
+  .setting-row button, .setting-row select { width: 100%; }
+  .inline-input-row { flex-wrap: wrap; width: 100%; }
+  .inline-input-row input { flex: 1; min-width: 80px; }
+
+  /* ── SAVINGS ── */
+  .savings-kpi-row { grid-template-columns: 1fr; }
+  .savings-acc-card { padding: 14px; }
+
+  /* ── ANALYTICS ── */
+  .analytics-grid { grid-template-columns: 1fr !important; }
+  .analytics-card-wide { grid-column: 1 !important; }
+  .period-switcher { gap: 4px; }
+  .pill { padding: 6px 12px; font-size: 12px; }
+
+  /* ── MODALS — slide up from bottom like native sheets ── */
+  .modal {
+    position: fixed;
+    width: 100vw;
+    max-width: 100vw;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    transform: none !important;
+    border-radius: 24px 24px 0 0;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUpModal 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  .modal-header {
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    z-index: 1;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Drag handle above modal */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+    margin: 10px auto 0;
+    position: sticky;
+    top: 0;
+  }
+
+  @keyframes slideUpModal {
+    from { transform: translateY(100%) !important; }
+    to   { transform: translateY(0) !important; }
+  }
+
+  .modal-backdrop.open { background: rgba(0,0,0,0.55); }
+  .modal-wide { width: 100vw; }
+
+  /* ── BOTTOM NAV — native tab bar ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    padding: 0 8px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 0;
+    z-index: 500;
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 10px;
+    transition: color 0.15s;
+    flex: 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bottom-nav-item svg { width: 22px; height: 22px; }
+
+  .bottom-nav-item.active { color: var(--accent); }
+  .bottom-nav-item.active svg {
+    filter: drop-shadow(0 0 5px rgba(108,138,255,0.4));
+  }
+
+  .bottom-nav-item span {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  /* Center + FAB button */
+  .bottom-nav-add {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(108,138,255,0.5);
+    transition: transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+    margin: 0 4px;
+    margin-bottom: 4px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bottom-nav-add:active {
+    transform: scale(0.92);
+    box-shadow: 0 2px 10px rgba(108,138,255,0.3);
+  }
+
+  /* ── FORMS — prevent iOS zoom ── */
+  .form-input, .filter-select, select, input[type="text"], input[type="number"], input[type="date"] {
+    font-size: 16px !important;
+    border-radius: 12px;
+  }
+
+  .btn-primary, .btn-secondary, .btn-danger {
+    padding: 12px 20px;
+    font-size: 14px;
+    border-radius: 12px;
+  }
+
+  .type-btn { padding: 10px 8px; font-size: 12px; }
+
+  /* ── SYNC BAR ── */
+  .sync-status-bar { flex-wrap: wrap; font-size: 12px; }
+
+  /* ── CAT MANAGE ── */
+  .cat-manage-row { padding: 10px 0; }
+
+  /* ── COMPARE ROW ── */
+  .compare-row { flex-wrap: wrap; gap: 8px; font-size: 12px; }
+
 }
 
-function renderCashflowChart(){
-  const{grid,text}=chartColors();
-  const cycles = getLastNCycles(6); // 6 budgetcycli i.p.v. kalendermaanden — volgt de instelling onder Instellingen
-  const months = cycles.map(c => c.label);
-  const incD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='income'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const expD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='expense'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const traD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='transfer'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
-
-  const ctx=document.getElementById('cashflowChart').getContext('2d');
-  if(charts.cashflow)charts.cashflow.destroy();
-  charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(52,212,138,0.75)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,94,108,0.75)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(167,139,250,0.65)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>cycles[items[0].dataIndex].fullLabel,label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('cashflowLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'},{label:'Transfers',color:'#a78bfa'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+@media (max-width: 380px) {
+  .kpi-value { font-size: 17px; }
+  .bottom-nav-item span { display: none; }
+  .bottom-nav { padding: 0 4px; }
+  .bottom-nav-add { width: 46px; height: 46px; font-size: 22px; }
 }
 
-function renderDonutChart(cats){
-  const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-  const total=entries.reduce((a,[,v])=>a+v,0);
-  document.getElementById('donutTotal').textContent=fmt(total);
-  const ctx=document.getElementById('donutChart').getContext('2d');
-  if(charts.donut)charts.donut.destroy();
-  if(!entries.length){document.getElementById('donutLegend').innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center">Geen uitgaven</div>';return;}
-  charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map(([k])=>catColor(k)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#16161d',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
-  document.getElementById('donutLegend').innerHTML=entries.slice(0,6).map(([k,v])=>`<div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:${catColor(k)}"></span>${k}</span><span class="donut-leg-amt">${fmt(v)}</span></div>`).join('');
+@media (max-width: 380px) {
+  .kpi-value { font-size: 16px; }
+  .bottom-nav-item span { display: none; }
+  .bottom-nav { padding: 0 8px; }
 }
 
 /* ═══════════════════════════════════════════════
-   RENDER TRANSACTIONS
+   TRANSFERS & NEW ADDITIONS
    ═══════════════════════════════════════════════ */
-function renderTransactions(){
-  updateCatFilter();
-  const tx=getFilteredTx();
-  const tbody=document.getElementById('txTableBody');
-  if(!tx.length){tbody.innerHTML='<tr><td colspan="5" class="empty-state">Geen transacties gevonden</td></tr>';document.getElementById('txSummary').innerHTML='';return;}
-  tbody.innerHTML=tx.map(t=>{
-    const col=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':catColor(t.cat);
-    const amtClass=t.type==='income'?'income':t.type==='transfer'?'transfer':'expense';
-    const sign=t.type==='income'?'+':t.type==='transfer'?'⇄':'−';
-    const dateStr=new Date(t.date).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'});
-    const sub=t.type==='transfer'&&(t.fromAccount||t.toAccount)?`<div style="font-size:11px;color:var(--text3)">${t.fromAccount||'?'} → ${t.toAccount||'?'}</div>`:t.note?`<div style="font-size:11px;color:var(--text3)">${t.note}</div>`:'';
-    return `<tr><td><div style="font-weight:500">${t.desc}</div>${sub}</td><td><span class="tx-cat-badge"><span class="tx-cat-dot" style="background:${col}"></span>${t.cat}</span></td><td class="tx-date-cell">${dateStr}</td><td class="tx-amount-cell"><span class="tx-amount ${amtClass}">${sign}${fmt(t.amt)}</span></td><td class="tx-actions"><button class="tx-del-btn" onclick="editTx(${t.id})" title="Bewerken" style="margin-right:2px">✎</button><button class="tx-del-btn" onclick="deleteTx(${t.id})" title="Verwijderen">×</button></td></tr>`;
-  }).join('');
-  const inc=tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-  const exp=tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const tra=tx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0);
-  document.getElementById('txSummary').innerHTML=`<span class="tx-summary-item">${tx.length} transacties</span><span class="tx-summary-item">Inkomsten: <strong style="color:var(--green)">${fmt(inc)}</strong></span><span class="tx-summary-item">Uitgaven: <strong style="color:var(--red)">${fmt(exp)}</strong></span>${tra>0?`<span class="tx-summary-item">Transfers: <strong style="color:var(--purple)">${fmt(tra)}</strong></span>`:''}<span class="tx-summary-item">Saldo: <strong style="color:${inc-exp>=0?'var(--green)':'var(--red)'}">${fmtSigned(inc-exp)}</strong></span>`;
+
+.kpi-transfer { border-top: 2px solid var(--purple); }
+.transfer-icon { color: var(--purple); }
+
+.type-toggle { display: flex; gap: 0; margin-bottom: 18px; background: var(--bg3); border-radius: var(--radius); padding: 3px; }
+.type-btn { flex: 1; font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600; padding: 8px 6px; border: none; border-radius: calc(var(--radius) - 2px); background: transparent; color: var(--text2); cursor: pointer; transition: all var(--transition); }
+.type-btn.active { background: var(--bg2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+
+/* ═══════════════════════════════════════════════
+   CATEGORY MANAGEMENT
+   ═══════════════════════════════════════════════ */
+.cat-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.cat-manage-row:last-child { border-bottom: none; }
+.cat-manage-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.cat-manage-emoji { font-size: 15px; width: 20px; text-align: center; }
+.cat-manage-name { flex: 1; color: var(--text); }
+.cat-manage-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 15px; padding: 0 4px; border-radius: 4px; transition: color var(--transition); line-height: 1; }
+.cat-manage-del:hover { color: var(--red); }
+.cat-manage-del:disabled { opacity: 0.3; cursor: default; }
+
+/* ═══════════════════════════════════════════════
+   CSV IMPORT
+   ═══════════════════════════════════════════════ */
+.modal-wide { width: 640px; }
+
+.csv-bank-row { margin-bottom: 16px; }
+
+.csv-dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  margin-bottom: 14px;
+}
+.csv-dropzone:hover, .csv-dropzone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.csv-drop-icon { font-size: 28px; margin-bottom: 8px; color: var(--text3); }
+.csv-drop-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.csv-drop-sub { font-size: 12px; color: var(--text3); }
+
+.csv-tip {
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg3);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  line-height: 1.6;
+}
+
+.csv-step-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.csv-map-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.csv-map-row { display: flex; flex-direction: column; gap: 4px; }
+.csv-map-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); }
+
+.csv-preview-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+.csv-preview-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 200px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.csv-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.csv-preview-table th {
+  text-align: left;
+  padding: 7px 10px;
+  background: var(--bg3);
+  color: var(--text3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  white-space: nowrap;
+}
+
+.csv-preview-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.csv-preview-table tr:last-child td { border-bottom: none; }
+.csv-preview-table tr:hover td { background: var(--bg3); }
+
+.csv-import-summary {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--green-dim);
+  border: 1px solid rgba(52,212,138,0.2);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.csv-sum-item { color: var(--text2); }
+.csv-sum-item strong { font-family: 'Space Grotesk', sans-serif; color: var(--text); font-weight: 700; }
+
+.tx-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tx-type-badge.income { background: var(--green-dim); color: var(--green); }
+.tx-type-badge.expense { background: var(--red-dim); color: var(--red); }
+.tx-type-badge.transfer { background: var(--purple-dim); color: var(--purple); }
+
+/* ═══════════════════════════════════════════════
+   SAVINGS PAGE
+   ═══════════════════════════════════════════════ */
+.savings-kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.savings-acc-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+.savings-acc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.savings-acc-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.savings-acc-note {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.savings-acc-balance {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.savings-acc-target {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+
+.savings-acc-month {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* savings kpi moved to main 900px block */
+
+/* ═══════════════════════════════════════════════
+   GOOGLE SHEETS SYNC
+   ═══════════════════════════════════════════════ */
+.sync-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+
+.sync-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.sync-dot.syncing      { background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: pulse 1s infinite; }
+.sync-dot.error        { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.sync-last {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text3);
+}
+
+.sync-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
 /* ═══════════════════════════════════════════════
-   RENDER ANALYTICS
+   MOBILE QUICK NAV (settings page shortcuts)
    ═══════════════════════════════════════════════ */
-function renderAnalytics(){
-  const{grid,text}=chartColors();
-  const subEl = document.getElementById('analyticsSub');
-  if (subEl) {
-    if (state.analyticsPeriod === 'month')   subEl.textContent = `Per dag — ${cycleLabel()}`;
-    if (state.analyticsPeriod === 'quarter') subEl.textContent = 'Per week — laatste 13 weken';
-    if (state.analyticsPeriod === 'year')    subEl.textContent = 'Per cyclus — laatste 12 cycli';
-  }
-
-  // ── Bouw periode-buckets ──
-  let periods = [];
-  const todayDate = new Date();
-  if (state.analyticsPeriod === 'month') {
-    const { start, end } = getCurrentCycleRange();
-    let cursor = new Date(start);
-    while (cursor <= end) {
-      const dayStr = dateToStr(cursor);
-      periods.push({ match: t => t.date === dayStr, label: cursor.getDate().toString() });
-      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
-    }
-  } else if (state.analyticsPeriod === 'quarter') {
-    for (let i = 12; i >= 0; i--) {
-      const weekEnd = new Date(todayDate); weekEnd.setDate(weekEnd.getDate() - (i * 7));
-      const weekStart = new Date(weekEnd); weekStart.setDate(weekStart.getDate() - 6);
-      const ws = dateToStr(weekStart), we = dateToStr(weekEnd);
-      periods.push({ match: t => t.date >= ws && t.date <= we, label: weekStart.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) });
-    }
-  } else {
-    periods = getLastNCycles(12);
-  }
-
-  const labels  = periods.map(p => p.label);
-  const incArr  = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const expArr  = periods.map(p => Math.round(state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const maxTicks = state.analyticsPeriod==='month' ? 15 : 13;
-  const ptRadius = state.analyticsPeriod==='month' ? 2 : 4;
-
-  // ── Verhaal: wat gebeurt er met je geld? ──
-  renderMoneyStory();
-
-  // ── Categorie verdeling ──
-  renderCatBreakdown();
-
-  // ── Vaste vs variabele lasten ──
-  renderFixedVarChart(grid, text);
-
-  // ── Cyclus vergelijking ──
-  renderCycleCompare();
-
-  // ── Inkomsten vs Uitgaven chart ──
-  const ctx1=document.getElementById('incExpChart').getContext('2d');
-  if(charts.incExp)charts.incExp.destroy();
-  charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[
-    {label:'Inkomsten',data:incArr,borderColor:'#34d48a',backgroundColor:'rgba(52,212,138,0.08)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#34d48a'},
-    {label:'Uitgaven', data:expArr,borderColor:'#ff5e6c',backgroundColor:'rgba(255,94,108,0.08)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#ff5e6c'}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
-
-  // ── Categorie trend ──
-  const topCats=Object.entries(state.transactions.filter(t=>t.type==='expense').reduce((a,t)=>{a[t.cat]=(a[t.cat]||0)+t.amt;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
-  const ctx2=document.getElementById('catTrendChart').getContext('2d');
-  if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:ptRadius}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-
-  // ── Spaarquote ──
-  const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
-  const ctx3=document.getElementById('savingsRateChart').getContext('2d');
-  if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(52,212,138,0.75)':v>=0?'rgba(255,179,64,0.75)':'rgba(255,94,108,0.75)'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
-
-  // ── Weekdag patroon ──
-  const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
-  state.transactions.filter(t=>t.type==='expense').forEach(t=>{const d=(new Date(t.date).getDay()+6)%7;wd[d]+=t.amt;wc[d]++;});
-  const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
-  const ctx4=document.getElementById('weekdayChart').getContext('2d');
-  if(charts.weekday)charts.weekday.destroy();
-  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,94,108,0.8)':'rgba(108,138,255,0.6)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-
-  renderYearReport();
-  renderInsights();
+.mobile-quick-nav {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 20px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
-/* ── Verhaal: wat gebeurt er met je geld ── */
-function renderMoneyStory() {
-  const storyEl = document.getElementById('moneyStory');
-  const flowEl  = document.getElementById('moneyFlowBars');
-  if (!storyEl || !flowEl) return;
-
-  const cycles = getLastNCycles(2);
-  const [prev, curr] = cycles;
-  const currTx = state.transactions.filter(t => curr.match(t));
-  const prevTx = state.transactions.filter(t => prev.match(t));
-
-  const income  = currTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-  const expense = currTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const prevExp = prevTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const savings = income - expense;
-  const savPct  = income > 0 ? Math.round((savings/income)*100) : 0;
-  const expDiff = expense - prevExp;
-
-  // Categorie met grootste stijging
-  const cats = {};
-  const prevCats = {};
-  currTx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  prevTx.filter(t=>t.type==='expense').forEach(t=>{prevCats[t.cat]=(prevCats[t.cat]||0)+t.amt;});
-  const biggestCat = Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
-  const biggestRise = Object.entries(cats)
-    .map(([cat,amt])=>({cat,amt,prev:prevCats[cat]||0,diff:amt-(prevCats[cat]||0)}))
-    .sort((a,b)=>b.diff-a.diff)[0];
-
-  // Bouw het verhaal
-  let story = '';
-  if (income === 0) {
-    story = 'Voeg inkomsten en uitgaven toe om je geldverhaal te zien.';
-  } else {
-    const cycleLabel_ = curr.fullLabel || curr.label;
-    story += `In de cyclus <strong>${cycleLabel_}</strong> verdiende je <strong style="color:var(--green)">${fmt(income)}</strong> en gaf je <strong style="color:var(--red)">${fmt(expense)}</strong> uit. `;
-
-    if (savings >= 0) {
-      story += `Je hield <strong style="color:var(--green)">${fmt(savings)}</strong> over — dat is <strong>${savPct}%</strong> van je inkomen. `;
-    } else {
-      story += `Je gaf <strong style="color:var(--red)">${fmt(Math.abs(savings))}</strong> meer uit dan je verdiende. `;
-    }
-
-    if (biggestCat) {
-      story += `Het meeste ging naar <strong>${biggestCat[0]}</strong> (${fmt(biggestCat[1])}). `;
-    }
-
-    if (prevExp > 0 && expDiff !== 0) {
-      const dir = expDiff > 0 ? 'meer' : 'minder';
-      const color = expDiff > 0 ? 'var(--red)' : 'var(--green)';
-      story += `Ten opzichte van de vorige cyclus gaf je <strong style="color:${color}">${fmt(Math.abs(expDiff))} ${dir}</strong> uit`;
-      if (biggestRise && biggestRise.diff > 0 && expDiff > 0) {
-        story += `, vooral door een stijging in <strong>${biggestRise.cat}</strong> (+${fmt(biggestRise.diff)})`;
-      }
-      story += '.';
-    }
-  }
-  storyEl.innerHTML = story;
-
-  // Geldstroom balken: hoe wordt het inkomen verdeeld?
-  if (income > 0) {
-    const catTotals = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-    const transferAmt = currTx.filter(t=>t.type==='transfer').reduce((a,t)=>a+t.amt,0);
-    const allItems = [...catTotals.map(([cat,amt])=>({label:cat,amt,color:catColor(cat)}))];
-    if (transferAmt > 0) allItems.push({label:'Transfers',amt:transferAmt,color:'var(--purple)'});
-    if (savings > 0) allItems.push({label:'Gespaard',amt:savings,color:'var(--green)'});
-
-    flowEl.innerHTML = `
-      <div class="flow-bar-track">
-        ${allItems.map(item=>`<div class="flow-bar-seg" style="width:${Math.min(100,Math.round((item.amt/income)*100))}%;background:${item.color}" title="${item.label}: ${fmt(item.amt)}"></div>`).join('')}
-      </div>
-      <div class="flow-bar-legend">
-        ${allItems.slice(0,6).map(item=>`<span class="flow-legend-item"><span style="background:${item.color}" class="flow-legend-dot"></span>${item.label} <span class="flow-legend-pct">${Math.round((item.amt/income)*100)}%</span></span>`).join('')}
-      </div>`;
-  } else {
-    flowEl.innerHTML = '';
-  }
+.mobile-quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
 }
 
-/* ── Categorie verdeling ── */
-function renderCatBreakdown() {
-  const el = document.getElementById('catBreakdownList');
-  const subEl = document.getElementById('catBreakdownSub');
-  if (!el) return;
+.mobile-quick-btn:last-child { border-bottom: none; }
+.mobile-quick-btn:active { background: var(--bg3); }
 
-  const cycles = getLastNCycles(2);
-  const curr = cycles[1];
-  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
-  const total = currTx.reduce((a,t)=>a+t.amt,0);
-  if (subEl) subEl.textContent = `Totaal ${fmt(total)} deze cyclus`;
+.mobile-quick-icon { font-size: 18px; width: 24px; text-align: center; }
+.mobile-quick-btn span:nth-child(2) { flex: 1; }
+.mobile-quick-arrow { color: var(--text3); font-size: 18px; font-weight: 300; }
 
-  const cats = {};
-  currTx.forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  const sorted = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+/* bottom-nav moved to main 600px block */
 
-  if (!sorted.length) { el.innerHTML = '<div class="empty-state">Geen uitgaven deze cyclus</div>'; return; }
-
-  el.innerHTML = sorted.map(([cat,amt])=>{
-    const pct = total>0 ? Math.round((amt/total)*100) : 0;
-    const col = catColor(cat);
-    return `<div class="cat-breakdown-row">
-      <span class="cat-breakdown-dot" style="background:${col}"></span>
-      <span class="cat-breakdown-name">${catEmoji(cat)} ${cat}</span>
-      <div class="cat-breakdown-bar-wrap">
-        <div class="cat-breakdown-bar" style="width:${pct}%;background:${col}"></div>
-      </div>
-      <span class="cat-breakdown-amt">${fmt(amt)}</span>
-      <span class="cat-breakdown-pct">${pct}%</span>
-    </div>`;
-  }).join('');
+/* ═══════════════════════════════════════════════
+   WELCOME SCREEN — minimal
+   ═══════════════════════════════════════════════ */
+.welcome-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ── Vaste vs variabele lasten ── */
-const FIXED_CATS = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening','Transport'];
-
-function renderFixedVarChart(grid, text) {
-  const cycles = getLastNCycles(2);
-  const curr = cycles[1];
-  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
-  const fixed    = currTx.filter(t=>FIXED_CATS.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
-  const variable = currTx.filter(t=>!FIXED_CATS.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
-
-  const ctx = document.getElementById('fixedVarChart');
-  if (!ctx) return;
-  if (charts.fixedVar) charts.fixedVar.destroy();
-
-  if (fixed + variable === 0) return;
-
-  charts.fixedVar = new Chart(ctx.getContext('2d'),{
-    type:'doughnut',
-    data:{
-      labels:['Vaste lasten','Variabel'],
-      datasets:[{
-        data:[Math.round(fixed),Math.round(variable)],
-        backgroundColor:['rgba(108,138,255,0.8)','rgba(52,212,138,0.8)'],
-        borderWidth:2,
-        borderColor: 'var(--bg2)',
-        hoverOffset:6
-      }]
-    },
-    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${state.settings.currency}${c.raw.toLocaleString('nl-NL')} (${Math.round(c.raw/(fixed+variable)*100)}%)`}}}}
-  });
-
-  const legEl = document.getElementById('fixedVarLegend');
-  if (legEl) {
-    const total = fixed + variable;
-    legEl.innerHTML = `
-      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(108,138,255,0.8)"></span>Vaste lasten</span><span class="donut-leg-amt">${fmt(fixed)} <small style="color:var(--text3)">${Math.round(fixed/total*100)}%</small></span></div>
-      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(52,212,138,0.8)"></span>Variabel</span><span class="donut-leg-amt">${fmt(variable)} <small style="color:var(--text3)">${Math.round(variable/total*100)}%</small></span></div>`;
-  }
+.welcome-minimal {
+  text-align: center;
+  animation: fadeIn 0.5s ease;
 }
 
-/* ── Cyclus vergelijking per categorie ── */
-function renderCycleCompare() {
-  const el = document.getElementById('cycleCompareList');
-  if (!el) return;
+.welcome-ask {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text2);
+  letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
 
-  const cycles = getLastNCycles(2);
-  const [prev, curr] = cycles;
-  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
-  const prevTx = state.transactions.filter(t=>prev.match(t)&&t.type==='expense');
+.welcome-name-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
 
-  const cats = {}, prevCats = {};
-  currTx.forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  prevTx.forEach(t=>{prevCats[t.cat]=(prevCats[t.cat]||0)+t.amt;});
+.welcome-name-input {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  width: 240px;
+  letter-spacing: -0.01em;
+}
 
-  const allCats = [...new Set([...Object.keys(cats),...Object.keys(prevCats)])];
-  const diffs = allCats.map(cat=>({cat, curr:cats[cat]||0, prev:prevCats[cat]||0, diff:(cats[cat]||0)-(prevCats[cat]||0)})).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+.welcome-name-input::placeholder { color: var(--text3); }
 
-  if (!diffs.length) { el.innerHTML = '<div class="empty-state">Niet genoeg data voor vergelijking</div>'; return; }
+.welcome-name-btn {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  padding: 16px 22px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
 
-  el.innerHTML = diffs.slice(0,8).map(d=>{
-    const col = catColor(d.cat);
-    const isUp = d.diff > 0;
-    const diffColor = isUp ? 'var(--red)' : 'var(--green)';
-    const arrow = isUp ? '↑' : '↓';
-    return `<div class="cat-breakdown-row">
-      <span class="cat-breakdown-dot" style="background:${col}"></span>
-      <span class="cat-breakdown-name">${catEmoji(d.cat)} ${d.cat}</span>
-      <span style="flex:1"></span>
-      <span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--text2)">${fmt(d.curr)}</span>
-      <span style="font-size:12px;font-weight:600;color:${d.diff===0?'var(--text3)':diffColor};margin-left:8px;min-width:60px;text-align:right">${d.diff===0?'—':`${arrow} ${fmt(Math.abs(d.diff))}`}</span>
-    </div>`;
-  }).join('');
+.welcome-name-btn:hover { opacity: 0.85; }
+
+/* ── Greeting overlay ── */
+.greeting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: transparent;
+}
+
+/* The liquid glass panel — sits behind the text */
+.greeting-glass {
+  position: absolute;
+  width: min(480px, 80vw);
+  height: 160px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) brightness(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.08) inset,
+    0 20px 60px rgba(0,0,0,0.25),
+    0 1px 0 rgba(255,255,255,0.15) inset;
+}
+
+[data-theme="light"] .greeting-glass {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255,255,255,0.7);
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.6) inset,
+    0 20px 60px rgba(0,0,0,0.08),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+}
+
+/* The greeting text — floats on top of the glass */
+.greeting-text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(26px, 5vw, 44px);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  text-align: center;
+  padding: 0 32px;
+}
+
+/* ═══════════════════════════════════════════════
+   MONTH COMPARISON
+   ═══════════════════════════════════════════════ */
+.compare-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.compare-row:last-child { border-bottom: none; }
+
+.compare-label {
+  width: 80px;
+  color: var(--text2);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.compare-prev, .compare-now {
+  flex: 1;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.compare-month {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text3);
+  text-transform: capitalize;
+}
+
+.compare-arrow { font-size: 16px; flex-shrink: 0; }
+.compare-arrow.better { color: var(--green); }
+.compare-arrow.worse  { color: var(--red); }
+
+.compare-delta {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  min-width: 70px;
+  text-align: right;
+}
+
+/* ═══════════════════════════════════════════════
+   PIN SCREEN
+   ═══════════════════════════════════════════════ */
+.pin-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 11000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  /* Prevent anything underneath from being interacted with */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Ensure pin keys are tappable */
+.pin-screen * {
+  touch-action: auto;
+}
+
+.pin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  max-width: 320px;
+}
+
+.pin-logo { margin-bottom: 16px; }
+
+.pin-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.pin-sub {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+/* PIN dots */
+.pin-dots {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.15);
+}
+
+.pin-dot.error {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+/* Numpad */
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.pin-key {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.08s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.pin-key:hover { background: var(--bg3); }
+.pin-key:active { transform: scale(0.92); background: var(--accent-dim2); }
+
+.pin-key-empty {
+  background: transparent !important;
+  border-color: transparent !important;
+  cursor: default;
+}
+
+.pin-key-del {
+  font-size: 20px;
+  color: var(--text2);
+}
+
+.pin-forgot {
+  margin-top: 24px;
+  font-size: 12px;
+}
+
+.pin-forgot button {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+
+.pin-forgot button:hover { color: var(--text2); }
+
+@keyframes pinShake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px); }
+  40%       { transform: translateX(8px); }
+  60%       { transform: translateX(-5px); }
+  80%       { transform: translateX(5px); }
+}
+
+.pin-dots.shake { animation: pinShake 0.4s ease; }
+
+/* ═══════════════════════════════════════════════
+   APP LOCK — voorkomt dat content zichtbaar is
+   voordat de PIN-check is afgerond
+   ═══════════════════════════════════════════════ */
+body.app-locked .sidebar,
+body.app-locked .topbar,
+body.app-locked .main,
+body.app-locked .bottom-nav {
+  visibility: hidden;
+}
+
+/* Het pin-screen zelf moet altijd zichtbaar blijven, ook als de body locked is */
+body.app-locked .pin-screen {
+  visibility: visible;
+}
+
+/* ── Category edit button ── */
+.cat-manage-edit {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color var(--transition), background var(--transition);
+  margin-left: auto;
+  line-height: 1;
+}
+.cat-manage-edit:hover { color: var(--accent); background: var(--accent-dim); }
+
+/* ═══════════════════════════════════════════════
+   ANALYTICS — VERHAAL & NIEUWE SECTIES
+   ═══════════════════════════════════════════════ */
+
+/* Money story card */
+.money-story-card {
+  margin-bottom: 14px;
+}
+
+.money-story-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.money-story-icon {
+  font-size: 20px;
+}
+
+.money-story-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text2);
+  margin-bottom: 16px;
+}
+
+.money-story-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Geldstroom balkje */
+.flow-bar-track {
+  display: flex;
+  height: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.flow-bar-seg {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  min-width: 2px;
+}
+
+.flow-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 6px;
+}
+
+.flow-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.flow-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.flow-legend-pct {
+  color: var(--text3);
+  font-size: 11px;
+}
+
+/* Categorie breakdown lijst */
+.cat-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.cat-breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cat-breakdown-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cat-breakdown-name {
+  min-width: 100px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-breakdown-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cat-breakdown-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.cat-breakdown-amt {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 64px;
+  text-align: right;
+}
+
+.cat-breakdown-pct {
+  font-size: 11px;
+  color: var(--text3);
+  min-width: 30px;
+  text-align: right;
+}
+
+/* card sub label */
+.card-sub {
+  font-size: 12px;
+  color: var(--text3);
 }
 
 
 /* ═══════════════════════════════════════════════
    JAAROVERZICHT
    ═══════════════════════════════════════════════ */
-function renderYearReport() {
-  const sel = document.getElementById('yearReportSelect');
-  const el  = document.getElementById('yearReport');
-  if (!sel || !el) return;
-
-  // Vul jaren dropdown op basis van beschikbare data
-  const years = [...new Set(state.transactions.map(t => t.date.slice(0,4)))].sort().reverse();
-  if (!years.length) { el.innerHTML = '<div class="empty-state">Nog geen data</div>'; return; }
-
-  if (!sel.options.length || sel.options.length !== years.length) {
-    const current = sel.value;
-    sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
-    if (current && years.includes(current)) sel.value = current;
-  }
-
-  const year = sel.value || years[0];
-  const yearTx = state.transactions.filter(t => t.date.startsWith(year));
-
-  const income  = yearTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-  const expense = yearTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const saved   = income - expense;
-  const savedPct = income > 0 ? Math.round((saved/income)*100) : 0;
-
-  // Per maand analyse — beste en slechtste maand
-  const monthlyData = [];
-  for (let m = 1; m <= 12; m++) {
-    const prefix = `${year}-${String(m).padStart(2,'0')}`;
-    const mTx = yearTx.filter(t => t.date.startsWith(prefix));
-    const mInc = mTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-    const mExp = mTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-    if (mTx.length > 0) {
-      monthlyData.push({ month: m, income: mInc, expense: mExp, net: mInc - mExp,
-        name: new Date(parseInt(year), m-1, 1).toLocaleDateString('nl-NL',{month:'long'}) });
-    }
-  }
-
-  const bestMonth  = [...monthlyData].sort((a,b)=>b.net-a.net)[0];
-  const worstMonth = [...monthlyData].sort((a,b)=>a.net-b.net)[0];
-
-  // Top categorieën
-  const cats = {};
-  yearTx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
-  // Aantal transacties en gemiddelde
-  const txCount = yearTx.filter(t=>t.type==='expense').length;
-  const avgTx   = txCount > 0 ? expense / txCount : 0;
-
-  el.innerHTML = `
-    <div class="year-report-grid">
-      <div class="year-stat">
-        <div class="year-stat-label">Totaal verdiend</div>
-        <div class="year-stat-value" style="color:var(--green)">${fmt(income)}</div>
-      </div>
-      <div class="year-stat">
-        <div class="year-stat-label">Totaal uitgegeven</div>
-        <div class="year-stat-value" style="color:var(--red)">${fmt(expense)}</div>
-      </div>
-      <div class="year-stat">
-        <div class="year-stat-label">Overgehouden</div>
-        <div class="year-stat-value" style="color:${saved>=0?'var(--green)':'var(--red)'}">${fmt(saved)} <small>(${savedPct}%)</small></div>
-      </div>
-      <div class="year-stat">
-        <div class="year-stat-label">Gem. per uitgave</div>
-        <div class="year-stat-value">${fmt(avgTx)} <small>(${txCount}x)</small></div>
-      </div>
-    </div>
-
-    ${monthlyData.length >= 2 ? `
-    <div class="year-months-row">
-      ${bestMonth ? `<div class="year-month-card best">
-        <span class="year-month-icon">🏆</span>
-        <div>
-          <div class="year-month-label">Beste maand</div>
-          <div class="year-month-name">${bestMonth.name}</div>
-          <div class="year-month-val" style="color:var(--green)">+${fmt(bestMonth.net)}</div>
-        </div>
-      </div>` : ''}
-      ${worstMonth && worstMonth !== bestMonth ? `<div class="year-month-card worst">
-        <span class="year-month-icon">📉</span>
-        <div>
-          <div class="year-month-label">Duurste maand</div>
-          <div class="year-month-name">${worstMonth.name}</div>
-          <div class="year-month-val" style="color:var(--red)">${fmt(worstMonth.net)}</div>
-        </div>
-      </div>` : ''}
-    </div>` : ''}
-
-    ${topCats.length ? `
-    <div class="year-topcats">
-      <div class="year-topcats-title">Top uitgaven categorieën</div>
-      ${topCats.map(([cat, amt], i) => `
-        <div class="year-topcat-row">
-          <span class="year-topcat-rank">${i+1}</span>
-          <span class="year-topcat-name">${catEmoji(cat)} ${cat}</span>
-          <span class="year-topcat-amt">${fmt(amt)}</span>
-        </div>`).join('')}
-    </div>` : ''}
-  `;
+.year-report-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
-function renderInsights(){
-  const{income,expense,balance,cats,burnDaily,projected}=computeMetrics();
-  const ins=[];
-  if(income>0){
-    const sp=Math.round((balance/income)*100);
-    if(sp>=20)ins.push({type:'good',icon:'💚',title:'Spaardoel gehaald',body:`Je spaart ${sp}% van je inkomsten — boven de aanbevolen 20%.`});
-    else if(sp<0)ins.push({type:'bad',icon:'🚨',title:'Budget overschreden',body:`Je hebt ${fmt(Math.abs(balance))} meer uitgegeven dan je hebt verdiend.`});
-    else ins.push({type:'warn',icon:'⚠️',title:'Spaarquote laag',body:`Je spaart ${sp}% — probeer 20% (${fmt(income*0.2)}/maand).`});
-    const hp=Math.round(((cats['Wonen']||0)/income)*100);
-    if(hp>40)ins.push({type:'warn',icon:'🏠',title:'Hoge woonlasten',body:`Wonen is ${hp}% van inkomen. Max. advies: 30-35%.`});
-    const subs=cats['Abonnementen']||0;
-    if(subs>0)ins.push({type:'info',icon:'📱',title:'Abonnementen',body:`${fmt(subs)}/maand. Check regelmatig welke je gebruikt.`});
-    if(projected>income)ins.push({type:'bad',icon:'📈',title:'Burn rate te hoog',body:`Projectie ${fmt(projected)} > inkomen ${fmt(income)}.`});
-    else ins.push({type:'good',icon:'📉',title:'Burn rate gezond',body:`Projectie ${fmt(projected)} blijft onder inkomen.`});
-    const bc=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
-    if(bc)ins.push({type:'info',icon:'📊',title:'Grootste categorie',body:`${bc[0]}: ${fmt(bc[1])} (${Math.round(bc[1]/expense*100)}%).`});
-    const savTotal=state.savings.accounts.reduce((a,acc)=>a+acc.balance,0);
-    if(savTotal>0)ins.push({type:'good',icon:'🏦',title:'Totaal gespaard',body:`Je hebt ${fmt(savTotal)} op je spaarrekening(en) staan.`});
-  }else{ins.push({type:'info',icon:'💡',title:'Voeg inkomsten toe',body:'Voeg je maandinkomen toe om inzichten te genereren.'});}
-  document.getElementById('insightsGrid').innerHTML=ins.map(i=>`<div class="insight-tile ${i.type}"><div class="insight-icon">${i.icon}</div><div class="insight-title">${i.title}</div><div class="insight-body">${i.body}</div></div>`).join('');
+.year-stat {
+  background: var(--bg3);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
 }
 
-/* ═══════════════════════════════════════════════
-   RENDER BUDGETS & GOALS
-   ═══════════════════════════════════════════════ */
-function renderBudgets(){
-  const grid=document.getElementById('budgetGrid');
-  const entries=Object.entries(state.budgets);
-  if(!entries.length){grid.innerHTML=`<div class="empty-card"><div class="empty-icon">◎</div><div class="empty-title">Nog geen budgetten</div><div class="empty-sub">Stel een limiet in per categorie.</div><button class="btn-primary" onclick="openModal('addBudget')">Budget toevoegen</button></div>`;return;}
-  const tx=getCurrentMonthTx();
-  grid.innerHTML=entries.map(([cat,limit])=>{
-    const spent=tx.filter(t=>t.type==='expense'&&t.cat===cat).reduce((a,t)=>a+t.amt,0);
-    const pct=Math.min(100,Math.round((spent/limit)*100));
-    const over=spent>limit,warn=pct>=80&&!over;
-    const col=catColor(cat);
-    const barCol=over?'var(--red)':warn?'var(--amber)':col;
-    const rem=limit-spent;
-    return `<div class="budget-card"><div class="budget-card-header"><div class="budget-cat-name"><span class="budget-cat-dot" style="background:${col}"></span>${catEmoji(cat)} ${cat}</div><div style="display:flex;gap:8px;align-items:center"><span class="budget-pct-badge ${over?'over':warn?'warn':'ok'}">${pct}%</span><button class="budget-del-btn" onclick="deleteBudget('${cat}')">×</button></div></div><div class="budget-spent">${fmt(spent)}</div><div class="budget-amounts"><span>van ${fmt(limit)} budget</span><span style="color:${over?'var(--red)':rem<limit*0.2?'var(--amber)':'var(--green)'}">${over?'−'+fmt(Math.abs(rem))+' over':fmt(rem)+' resterend'}</span></div><div class="budget-bar-track"><div class="budget-bar-fill" style="width:${pct}%;background:${barCol}"></div></div></div>`;
-  }).join('');
+.year-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text3);
+  margin-bottom: 6px;
 }
 
-function renderGoals(){
-  const grid=document.getElementById('goalsGrid');
-  if(!state.goals.length){grid.innerHTML=`<div class="empty-card"><div class="empty-icon">★</div><div class="empty-title">Nog geen doelen</div><div class="empty-sub">Voeg een spaardoel toe.</div><button class="btn-primary" onclick="openModal('addGoal')">Doel toevoegen</button></div>`;return;}
-  grid.innerHTML=state.goals.map(g=>{
-    const pct=Math.min(100,Math.round((g.saved/g.target)*100));
-    const rem=g.target-g.saved;
-    const ml=Math.max(1,Math.ceil((new Date(g.date)-new Date())/(1000*60*60*24*30)));
-    const monthly=rem>0?rem/ml:0;
-    const done=g.saved>=g.target;
-    return `<div class="goal-card" style="border-top:3px solid ${g.color}"><div class="goal-header"><div><div class="goal-name">${g.name}${done?' ✓':''}</div><div class="goal-date">Doel: ${new Date(g.date).toLocaleDateString('nl-NL',{month:'long',year:'numeric'})}</div></div><button class="goal-del-btn" onclick="deleteGoal(${g.id})">×</button></div><div class="goal-pct" style="color:${g.color}">${pct}%</div><div class="goal-amounts">${fmt(g.saved)} gespaard van ${fmt(g.target)}</div><div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%;background:${g.color}"></div></div>${done?`<div class="goal-monthly" style="color:var(--green)">🎉 Doel behaald!</div>`:`<div class="goal-monthly">Nog <strong>${fmt(rem)}</strong> — spaar <strong>${fmt(monthly)}/maand</strong></div>`}</div>`;
-  }).join('');
+.year-stat-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.year-stat-value small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+}
+
+.year-months-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.year-month-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--bg3);
+}
+
+.year-month-card.best  { border-left: 3px solid var(--green); }
+.year-month-card.worst { border-left: 3px solid var(--red); }
+
+.year-month-icon { font-size: 22px; }
+
+.year-month-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text3);
+}
+
+.year-month-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.year-month-val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.year-topcats-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+.year-topcat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.year-topcat-row:last-child { border-bottom: none; }
+
+.year-topcat-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+
+.year-topcat-name { flex: 1; color: var(--text); }
+
+.year-topcat-amt {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (max-width: 600px) {
+  .year-report-grid { grid-template-columns: 1fr 1fr; }
+  .year-months-row { flex-direction: column; }
 }
 
 /* ═══════════════════════════════════════════════
-   RENDER SETTINGS
+   MOBIELE HERO — desktop: verborgen
    ═══════════════════════════════════════════════ */
-function renderSettings(){
-  document.getElementById('themeLight').classList.toggle('active',state.settings.theme==='light');
-  document.getElementById('themeDark').classList.toggle('active',state.settings.theme==='dark');
-  document.getElementById('currencySelect').value=state.settings.currency;
-  if(state.settings.monthlyIncome)document.getElementById('incomeInput').value=state.settings.monthlyIncome;
-  document.getElementById('cycleStartInput').value=state.settings.cycleStartDay||1;
-  renderCatManageList();
-  renderSyncSettings();
-}
+.mobile-hero { display: none; }
 
-function setPeriod(p,el){
-  state.analyticsPeriod=p;
-  document.querySelectorAll('#page-analytics .pill').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
-  renderAnalytics();
-}
+@media (max-width: 600px) {
 
-
-/* ═══════════════════════════════════════════════
-   GOOGLE SHEETS SYNC — via Apps Script
-   ═══════════════════════════════════════════════ */
-
-const GS_URL = 'https://script.google.com/macros/s/AKfycbwv5eBxrbDZONavQKmwWVIvIhMQ3QpH-1k8_s7VV6l8LmOhPvcWIqwFI0hBrDaNtWAb/exec';
-
-const SHEET_TABS = {
-  transactions: 'Transacties',
-  budgets:      'Budgetten',
-  goals:        'Doelen',
-  savings_acc:  'Spaarrekeningen',
-  savings_tx:   'SpaarmutaTies',
-  categories:   'Categorieen',
-  settings:     'Instellingen',
-  security:     'Beveiliging'
-};
-
-let gsConfig = { autoSync: false };
-let syncInProgress = false;
-
-function loadGsConfig() {
-  try {
-    const raw = localStorage.getItem('budgetflow_gs');
-    if (raw) gsConfig = { ...gsConfig, ...JSON.parse(raw) };
-  } catch(e) {}
-}
-
-function saveGsConfig() {
-  localStorage.setItem('budgetflow_gs', JSON.stringify(gsConfig));
-}
-
-function setAutoSync(on) {
-  gsConfig.autoSync = on;
-  saveGsConfig();
-  const onBtn  = document.getElementById('autoSyncOn');
-  const offBtn = document.getElementById('autoSyncOff');
-  if (onBtn)  onBtn.classList.toggle('active',  on);
-  if (offBtn) offBtn.classList.toggle('active', !on);
-}
-
-/* ── Toast ── */
-function showToast(msg, type) {
-  type = type || 'success';
-  const colors = { success:'var(--green)', error:'var(--red)', info:'var(--accent)', warn:'var(--amber)' };
-  const icons  = { success:'✓', error:'✗', info:'ℹ', warn:'⚠' };
-  const t = document.createElement('div');
-  t.className = 'sync-toast';
-  t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:10px;font-family:Space Grotesk,sans-serif;font-weight:600;font-size:13px;z-index:9999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.3);color:#fff;animation:slideUp .2s ease';
-  t.style.background = colors[type] || colors.info;
-  t.innerHTML = '<span>' + (icons[type]||'ℹ') + '</span><span>' + msg + '</span>';
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
-}
-
-/* ── Status indicator ── */
-function updateSyncStatus(status, msg) {
-  const dot  = document.getElementById('syncDot');
-  const text = document.getElementById('syncStatusText');
-  const last = document.getElementById('syncLast');
-  if (!dot) return;
-  dot.className = 'sync-dot';
-  if (status === 'connected') {
-    dot.classList.add('connected');
-    text.textContent = msg || 'Gesynchroniseerd';
-    if (last) last.textContent = 'Laatste sync: ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'});
-  } else if (status === 'syncing') {
-    dot.classList.add('syncing');
-    text.textContent = msg || 'Synchroniseren...';
-  } else if (status === 'error') {
-    dot.classList.add('error');
-    text.textContent = msg || 'Fout bij synchroniseren';
-  } else {
-    text.textContent = 'Klaar om te synchroniseren';
-    if (last) last.textContent = '';
-  }
-}
-
-/* ── Apps Script GET — via URL with callback to bypass CORS ── */
-async function gsGet(tab) {
-  // Apps Script GET responses include CORS headers when deployed as "anyone"
-  // Use no-cors for POST, but GET works fine with regular fetch
-  const url = GS_URL + '?tab=' + encodeURIComponent(tab) + '&t=' + Date.now();
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const text = await res.text();
-  try {
-    const data = JSON.parse(text);
-    if (data.error) throw new Error(data.error);
-    return data.values || [];
-  } catch(e) {
-    throw new Error('Ongeldige response van server');
-  }
-}
-
-/* ── Apps Script POST — no-cors mode, then verify via GET ── */
-async function gsPut(tab, values) {
-  // With no-cors we can't read the response, but the write still happens
-  await fetch(GS_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: JSON.stringify({ tab, values })
-  });
-  // Small delay to let Apps Script process
-  await new Promise(r => setTimeout(r, 400));
-}
-
-/* ══════════════════════════════════════════
-   UPLOAD → SHEETS
-   ══════════════════════════════════════════ */
-async function syncToSheets() {
-  if (syncInProgress) return;
-  syncInProgress = true;
-  updateSyncStatus('syncing', 'Uploaden...');
-
-  try {
-    await gsPut(SHEET_TABS.transactions, [
-      ['id','type','desc','amt','date','cat','note','fromAccount','toAccount'],
-      ...state.transactions.map(t=>[t.id,t.type,t.desc,t.amt,t.date,t.cat,t.note||'',t.fromAccount||'',t.toAccount||''])
-    ]);
-
-    await gsPut(SHEET_TABS.budgets, [
-      ['category','limit'],
-      ...Object.entries(state.budgets).map(([cat,lim])=>[cat,lim])
-    ]);
-
-    await gsPut(SHEET_TABS.goals, [
-      ['id','name','target','saved','date','color'],
-      ...state.goals.map(g=>[g.id,g.name,g.target,g.saved,g.date,g.color])
-    ]);
-
-    await gsPut(SHEET_TABS.savings_acc, [
-      ['id','name','balance','target','color','note'],
-      ...state.savings.accounts.map(a=>[a.id,a.name,a.balance,a.target||0,a.color,a.note||''])
-    ]);
-
-    await gsPut(SHEET_TABS.savings_tx, [
-      ['id','accountId','type','amt','date','desc'],
-      ...state.savings.transactions.map(t=>[t.id,t.accountId,t.type,t.amt,t.date,t.desc])
-    ]);
-
-    await gsPut(SHEET_TABS.categories, [
-      ['name','emoji','color','deletable'],
-      ...state.categories.map(c=>[c.name,c.emoji,c.color,c.deletable?'1':'0'])
-    ]);
-
-    await gsPut(SHEET_TABS.settings, [
-      ['key','value'],
-      ['currency',     state.settings.currency],
-      ['theme',        state.settings.theme],
-      ['monthlyIncome',state.settings.monthlyIncome]
-    ]);
-
-    updateSyncStatus('connected', 'Opgeslagen in Sheets');
-    showToast('Alles opgeslagen in Google Sheets!', 'success');
-
-  } catch(e) {
-    updateSyncStatus('error', 'Upload mislukt');
-    showToast('Fout: ' + e.message, 'error');
-    console.error('syncToSheets:', e);
-  } finally {
-    syncInProgress = false;
-  }
-}
-
-/* ══════════════════════════════════════════
-   DOWNLOAD ← SHEETS
-   ══════════════════════════════════════════ */
-/* ── Debug helper: roep dit aan vanuit de browser console (F12) ──
-   debugMonth('2026-05') toont exact welke transacties de app telt voor die maand,
-   inclusief het 'type' veld, zodat verkeerd ingelezen rijen zichtbaar worden. */
-function debugMonth(prefix) {
-  const tx = state.transactions.filter(t => t.date.startsWith(prefix));
-  console.log(`=== ${prefix}: ${tx.length} transacties ===`);
-  let totalExpense = 0;
-  tx.forEach(t => {
-    if (t.type === 'expense') totalExpense += t.amt;
-    console.log(`${t.date} | type="${t.type}" | ${t.desc} | €${t.amt}`);
-  });
-  console.log(`--- Totaal uitgaven (type==='expense'): €${totalExpense.toFixed(2)} ---`);
-  return tx;
-}
-
-/* ── Debug helper voor cycli: toont EXACT dezelfde balken als de Cashflow-grafiek ──
-   Roep aan via de console: debugCycles()
-   Toont per balk de exacte start/eind-datum, het label, en alle transacties
-   die daar volgens de huidige code in vallen. */
-function debugCycles() {
-  const cycles = getLastNCycles(6);
-  cycles.forEach((c, idx) => {
-    const startStr = dateToStr(c.start);
-    const endStr = dateToStr(c.end);
-    const tx = state.transactions.filter(t => c.match(t));
-    const exp = tx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
-    console.log(`%c[${idx}] ${c.label} (${startStr} t/m ${endStr}) — ${tx.length} tx — uitgaven: €${exp.toFixed(2)}`, 'font-weight:bold;color:#6c8aff');
-    tx.filter(t => t.type === 'expense').forEach(t => {
-      console.log(`   ${t.date} | ${t.desc} | €${t.amt}`);
-    });
-  });
-}
-
-async function syncFromSheets() {
-  if (syncInProgress) return;
-  syncInProgress = true;
-  updateSyncStatus('syncing', 'Laden uit Sheets...');
-
-  try {
-    const txRows = await gsGet(SHEET_TABS.transactions);
-    if (txRows.length > 1) {
-      state.transactions = txRows.slice(1).filter(r=>r[0]).map(r=>({
-        id:Number(r[0]), type:r[1]||'expense', desc:r[2]||'',
-        amt:parseFloat(r[3])||0, date:r[4]||today(), cat:r[5]||'Overig',
-        note:r[6]||'', fromAccount:r[7]||'', toAccount:r[8]||''
-      }));
-    }
-
-    const budRows = await gsGet(SHEET_TABS.budgets);
-    if (budRows.length > 1) {
-      state.budgets = {};
-      budRows.slice(1).filter(r=>r[0]).forEach(r=>{ state.budgets[r[0]]=parseFloat(r[1])||0; });
-    }
-
-    const goalRows = await gsGet(SHEET_TABS.goals);
-    if (goalRows.length > 1) {
-      state.goals = goalRows.slice(1).filter(r=>r[0]).map(r=>({
-        id:Number(r[0]), name:r[1]||'', target:parseFloat(r[2])||0,
-        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#6c8aff'
-      }));
-    }
-
-    const savAccRows = await gsGet(SHEET_TABS.savings_acc);
-    if (savAccRows.length > 1) {
-      state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r=>({
-        id:Number(r[0]), name:r[1]||'', balance:parseFloat(r[2])||0,
-        target:parseFloat(r[3])||0, color:r[4]||'#34d48a', note:r[5]||''
-      }));
-    }
-
-    const savTxRows = await gsGet(SHEET_TABS.savings_tx);
-    if (savTxRows.length > 1) {
-      state.savings.transactions = savTxRows.slice(1).filter(r=>r[0]).map(r=>({
-        id:Number(r[0]), accountId:Number(r[1]), type:r[2]||'deposit',
-        amt:parseFloat(r[3])||0, date:r[4]||today(), desc:r[5]||''
-      }));
-    }
-
-    const catRows = await gsGet(SHEET_TABS.categories);
-    if (catRows.length > 1) {
-      state.categories = catRows.slice(1).filter(r=>r[0]).map(r=>({
-        name:r[0], emoji:r[1]||'📦', color:r[2]||'#94a3b8', deletable:r[3]==='1'
-      }));
-    }
-
-    const setRows = await gsGet(SHEET_TABS.settings);
-    if (setRows.length > 1) {
-      setRows.slice(1).forEach(r=>{
-        if (r[0]==='currency')      state.settings.currency      = r[1]||'€';
-        if (r[0]==='theme')         state.settings.theme         = r[1]||'dark';
-        if (r[0]==='monthlyIncome') state.settings.monthlyIncome = parseFloat(r[1])||0;
-      });
-    }
-
-    saveState(true); // skip autoSync to avoid loop
-    updateSyncStatus('connected', 'Geladen uit Sheets');
-    showToast('Data geladen uit Google Sheets!', 'success');
-
-    document.documentElement.setAttribute('data-theme', state.settings.theme);
-    populateCatSelect('txCat');
-    populateCatSelect('budgetCat');
-    updateCatFilter();
-    renderDashboard();
-    renderSettings();
-
-  } catch(e) {
-    updateSyncStatus('error', 'Laden mislukt');
-    showToast('Fout: ' + e.message, 'error');
-    console.error('syncFromSheets:', e);
-  } finally {
-    syncInProgress = false;
-  }
-}
-
-/* ── Auto-sync after every save ── */
-function autoSync() {
-  if (gsConfig.autoSync) syncToSheets();
-}
-
-/* ── Render sync panel in settings ── */
-function renderSyncSettings() {
-  const onBtn  = document.getElementById('autoSyncOn');
-  const offBtn = document.getElementById('autoSyncOff');
-  if (onBtn)  onBtn.classList.toggle('active',  gsConfig.autoSync);
-  if (offBtn) offBtn.classList.toggle('active', !gsConfig.autoSync);
-  updateSyncStatus('idle');
-}
-
-
-/* ═══════════════════════════════════════════════
-   WELCOME SCREEN — minimal
-   ═══════════════════════════════════════════════ */
-function checkFirstVisit() {
-  // Naamscherm verwijderd op verzoek — niets te doen hier.
-}
-
-
-
-/* ═══════════════════════════════════════════════
-   BUDGET NOTIFICATIONS
-   ═══════════════════════════════════════════════ */
-function checkBudgetNotifications() {
-  if (!Object.keys(state.budgets).length) return;
-  const tx = getCurrentMonthTx();
-  const alerts = [];
-
-  Object.entries(state.budgets).forEach(([cat, limit]) => {
-    const spent = tx.filter(t=>t.type==='expense'&&t.cat===cat).reduce((a,t)=>a+t.amt,0);
-    const pct = Math.round((spent/limit)*100);
-    if (pct >= 100) alerts.push({ cat, pct, type:'over',  msg:`${cat}: budget overschreden (${pct}%)` });
-    else if (pct >= 80) alerts.push({ cat, pct, type:'warn', msg:`${cat}: ${pct}% van budget opgebruikt` });
-  });
-
-  const container = document.getElementById('notifContainer');
-  if (!container || !alerts.length) return;
-
-  // Only show once per session
-  const shownKey = 'budgetflow_notif_' + today();
-  if (sessionStorage.getItem(shownKey)) return;
-  sessionStorage.setItem(shownKey, '1');
-
-  alerts.slice(0,3).forEach((a, i) => {
-    setTimeout(() => {
-      const n = document.createElement('div');
-      n.className = 'budget-notif';
-      n.style.cssText = `position:fixed;top:${20+i*70}px;right:20px;z-index:8000;background:var(--bg2);border:1px solid ${a.type==='over'?'var(--red)':'var(--amber)'};border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,0.3);font-size:13px;max-width:280px;animation:slideUp .3s ease`;
-      n.innerHTML = `<span style="font-size:18px">${a.type==='over'?'🚨':'⚠️'}</span><span style="color:var(--text);flex:1">${a.msg}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">×</button>`;
-      document.body.appendChild(n);
-      setTimeout(() => n.remove(), 6000);
-    }, i * 400);
-  });
-}
-
-/* ═══════════════════════════════════════════════
-   RECURRING TRANSACTIONS
-   ═══════════════════════════════════════════════ */
-let currentRecType = 'expense';
-
-function setRecType(type) {
-  currentRecType = type;
-  ['income','expense'].forEach(t => {
-    const btn = document.getElementById('recTypeBtn'+t.charAt(0).toUpperCase()+t.slice(1));
-    if (btn) btn.classList.toggle('active', t===type);
-  });
-  const catWrap = document.getElementById('recCatWrap');
-  if (catWrap) catWrap.style.display = type==='expense' ? '' : 'none';
-}
-
-function saveRecurring() {
-  const desc = document.getElementById('recDesc').value.trim();
-  const amt  = parseFloat(document.getElementById('recAmt').value);
-  const day  = parseInt(document.getElementById('recDay').value)||1;
-  const cat  = currentRecType==='expense' ? document.getElementById('recCat').value : 'Inkomst';
-  if (!desc||isNaN(amt)||amt<=0) return;
-  if (!state.recurring) state.recurring = [];
-  state.recurring.push({ id:Date.now(), type:currentRecType, desc, amt, day:Math.min(28,Math.max(1,day)), cat });
-  saveState();
-  closeModal();
-  renderRecurring();
-}
-
-function deleteRecurring(id) {
-  state.recurring = (state.recurring||[]).filter(r=>r.id!==id);
-  saveState();
-  renderRecurring();
-}
-
-function applyRecurring() {
-  const now = new Date();
-  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  let added = 0;
-  (state.recurring||[]).forEach(r => {
-    const day = String(Math.min(r.day, getDaysInMonth())).padStart(2,'0');
-    const date = `${monthPrefix}-${day}`;
-    // Check not already added this month
-    const alreadyExists = state.transactions.some(t=>t.desc===r.desc&&t.date.startsWith(monthPrefix)&&t.amt===r.amt&&t.type===r.type);
-    if (!alreadyExists) {
-      state.transactions.push({ id:Date.now()+Math.random(), type:r.type, desc:r.desc, amt:r.amt, date, cat:r.cat, note:'Terugkerend', fromAccount:'', toAccount:'' });
-      added++;
-    }
-  });
-  state.lastRecurringMonth = monthPrefix;
-  saveState();
-  renderRecurring();
-  renderDashboard();
-  if (added>0) showToast(`${added} terugkerende transacties toegevoegd!`, 'success');
-  else showToast('Alles was al toegevoegd deze maand.', 'info');
-}
-
-function renderRecurring() {
-  const list = document.getElementById('recurringList');
-  const applyRow = document.getElementById('recurringApplyRow');
-  const statusEl = document.getElementById('recurringMonthStatus');
-  if (!list) return;
-
-  const recurring = state.recurring||[];
-  const now = new Date();
-  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const alreadyApplied = state.lastRecurringMonth === monthPrefix;
-
-  if (statusEl) statusEl.textContent = alreadyApplied ? '✓ Toegevoegd deze maand' : 'Nog niet toegevoegd';
-  if (applyRow) applyRow.style.display = (!alreadyApplied && recurring.length) ? '' : 'none';
-
-  if (!recurring.length) {
-    list.innerHTML = '<div class="empty-state">Nog geen terugkerende transacties<br><span style="font-size:12px;color:var(--text3)">Voeg vaste lasten toe zoals huur, abonnementen of salaris</span></div>';
-    return;
+  /* ── HERO zichtbaar ── */
+  .mobile-hero {
+    display: block;
+    background: linear-gradient(160deg, var(--bg2) 0%, var(--bg3) 100%);
+    border: 1px solid var(--border-strong);
+    border-radius: 20px;
+    padding: 24px 20px 20px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
   }
 
-  const totalIn  = recurring.filter(r=>r.type==='income').reduce((a,r)=>a+r.amt,0);
-  const totalOut = recurring.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amt,0);
-
-  list.innerHTML = `
-    <div style="display:flex;gap:16px;padding:0 0 14px;border-bottom:1px solid var(--border);margin-bottom:12px;font-size:13px">
-      <span style="color:var(--text2)">Maandelijks in: <strong style="color:var(--green);font-family:'Space Grotesk',sans-serif">${fmt(totalIn)}</strong></span>
-      <span style="color:var(--text2)">Maandelijks uit: <strong style="color:var(--red);font-family:'Space Grotesk',sans-serif">${fmt(totalOut)}</strong></span>
-    </div>
-    <table class="tx-table">
-      <thead><tr><th>Omschrijving</th><th>Categorie</th><th>Dag</th><th class="right">Bedrag</th><th></th></tr></thead>
-      <tbody>${recurring.map(r=>{
-        const col = r.type==='income'?'var(--green)':catColor(r.cat);
-        const sign = r.type==='income'?'+':'−';
-        const amtCol = r.type==='income'?'var(--green)':'var(--red)';
-        return `<tr>
-          <td><div style="font-weight:500">${r.desc}</div><div style="font-size:11px;color:var(--text3)">Elke maand dag ${r.day}</div></td>
-          <td><span class="tx-cat-badge"><span class="tx-cat-dot" style="background:${col}"></span>${r.cat}</span></td>
-          <td style="color:var(--text2)">${r.day}</td>
-          <td class="tx-amount-cell"><span class="tx-amount ${r.type==='income'?'income':'expense'}">${sign}${fmt(r.amt)}</span></td>
-          <td><button class="tx-del-btn" onclick="deleteRecurring(${r.id})">×</button></td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>`;
-}
-
-/* ═══════════════════════════════════════════════
-   MONTH COMPARISON (dashboard addition)
-   ═══════════════════════════════════════════════ */
-function getMonthTx(monthPrefix) {
-  return state.transactions.filter(t=>t.date.startsWith(monthPrefix));
-}
-
-function renderMonthComparison() {
-  const el = document.getElementById('monthCompare');
-  if (!el) return;
-
-  const cycles = getLastNCycles(2); // [vorige cyclus, huidige cyclus]
-  const [prevCycle, thisCycle] = cycles;
-
-  const thisExp  = state.transactions.filter(t=>t.type==='expense'&&thisCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-  const prevExp  = state.transactions.filter(t=>t.type==='expense'&&prevCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-  const thisInc  = state.transactions.filter(t=>t.type==='income'&&thisCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-  const prevInc  = state.transactions.filter(t=>t.type==='income'&&prevCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-
-  const expDiff = thisExp - prevExp;
-  const incDiff = thisInc - prevInc;
-  const prevName = prevCycle.label;
-  const thisName = thisCycle.label;
-
-  el.innerHTML = `
-    <div class="compare-row">
-      <span class="compare-label">Uitgaven</span>
-      <span class="compare-prev">${fmt(prevExp)}<span class="compare-month">${prevName}</span></span>
-      <span class="compare-arrow ${expDiff>0?'worse':'better'}">${expDiff>0?'↑':'↓'}</span>
-      <span class="compare-now">${fmt(thisExp)}<span class="compare-month">${thisName}</span></span>
-      <span class="compare-delta" style="color:${expDiff>0?'var(--red)':'var(--green)'}">${expDiff>0?'+':''}${fmt(expDiff)}</span>
-    </div>
-    <div class="compare-row">
-      <span class="compare-label">Inkomsten</span>
-      <span class="compare-prev">${fmt(prevInc)}<span class="compare-month">${prevName}</span></span>
-      <span class="compare-arrow ${incDiff>=0?'better':'worse'}">${incDiff>=0?'↑':'↓'}</span>
-      <span class="compare-now">${fmt(thisInc)}<span class="compare-month">${thisName}</span></span>
-      <span class="compare-delta" style="color:${incDiff>=0?'var(--green)':'var(--red)'}">${incDiff>=0?'+':''}${fmt(incDiff)}</span>
-    </div>`;
-}
-
-
-
-/* ═══════════════════════════════════════════════
-   PIN / BEVEILIGING — opgeslagen in Google Sheets
-   ═══════════════════════════════════════════════ */
-
-let pinBuffer   = '';
-let pinMode     = 'enter'; // 'enter' | 'setup' | 'confirm'
-let pinTemp     = '';
-let pinAttempts = 0;
-const PIN_MAX_ATTEMPTS = 5;
-const PIN_TAB = 'Beveiliging';
-
-function hashPin(pin) {
-  let h = 0;
-  for (let i = 0; i < pin.length; i++) {
-    h = Math.imul(31, h) + pin.charCodeAt(i) | 0;
+  /* Subtiele gloed in de hero */
+  .mobile-hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(108,138,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
   }
-  return h.toString(36);
-}
 
-/* ── Lees pin hash uit Sheets ── */
-async function getPinFromSheet() {
-  try {
-    const rows = await gsGet('Beveiliging');
-    if (rows.length > 1 && rows[1][0]) return rows[1][0];
-  } catch(e) {}
-  return null;
-}
-
-/* ── Sla pin hash op in Sheets ── */
-async function savePinToSheet(hash) {
-  try {
-    await gsPut('Beveiliging', [['pin_hash'], [hash]]);
-  } catch(e) {
-    showToast('Opslaan mislukt: ' + e.message, 'error');
-    throw e;
+  .mobile-hero-label {
+    font-size: 12px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
   }
-}
 
-/* ── Verwijder pin uit Sheets ── */
-async function deletePinFromSheet() {
-  try {
-    await gsPut('Beveiliging', [['pin_hash']]);
-  } catch(e) {}
-}
-
-let _pinUnlockResolve = null;
-
-function checkPinSetup() {
-  return new Promise(async (resolve) => {
-    const screen = document.getElementById('pinScreen');
-    if (!screen) { resolve(); return; }
-
-    // GS_URL is hardcoded en werkt overal — geen lokale config nodig om de PIN te checken.
-    // Dit is de bewuste keuze: de pincode-check moet werken op élk apparaat,
-    // ook als dat apparaat zelf nooit een Sheets-verbinding heeft opgeslagen.
-    let stored;
-    try {
-      stored = await getPinFromSheet();
-    } catch(e) {
-      // Sheets niet bereikbaar — uit voorzorg toch blokkeren i.p.v. doorlaten
-      console.error('PIN check kon Sheets niet bereiken:', e);
-      stored = '__UNREACHABLE__'; // forceer lock-out i.p.v. open laten
-    }
-
-    if (!stored) { resolve(); return; }
-    if (stored === '__UNREACHABLE__') {
-      // Toon een duidelijke foutmelding i.p.v. de app gewoon open te laten
-      pinMode = 'enter';
-      screen.style.display = 'flex';
-      document.getElementById('pinSub').textContent = 'Kan beveiliging niet controleren — check je internetverbinding';
-      document.getElementById('pinPad') && (document.getElementById('pinPad').style.opacity = '0.4');
-      return; // resolve NIET aanroepen — app blijft op slot
-    }
-
-    // Pincode is ingesteld — toon slotscherm en wacht op correcte invoer
-    pinMode = 'enter';
-    pinBuffer = '';
-    pinAttempts = 0;
-    updatePinUI();
-    screen.style.display = 'flex';
-    document.getElementById('pinForgot').style.display = 'none';
-    document.addEventListener('keydown', onPinKeydown);
-    document.addEventListener('focusin', preventFocusUnderPin);
-
-    // Bewaar de resolve-functie zodat handlePinComplete de wachtende init() kan vrijgeven
-    _pinUnlockResolve = resolve;
-  });
-}
-
-function preventFocusUnderPin() {
-  const screen = document.getElementById('pinScreen');
-  if (screen && screen.style.display !== 'none') {
-    // Blur any focused element that's not in the pin screen
-    if (document.activeElement && !screen.contains(document.activeElement)) {
-      document.activeElement.blur();
-    }
+  .mobile-hero-amount {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin-bottom: 18px;
+    line-height: 1;
   }
-}
 
-function onPinKeydown(e) {
-  if (document.getElementById('pinScreen').style.display === 'none') return;
-  if (e.key >= '0' && e.key <= '9') pinKey(e.key);
-  if (e.key === 'Backspace') pinDelete();
-}
-
-function pinKey(digit) {
-  if (pinBuffer.length >= 8) return;
-  pinBuffer += digit;
-  updatePinDots();
-  if (pinBuffer.length === 8) setTimeout(() => handlePinComplete(), 120);
-}
-
-function pinDelete() {
-  if (pinBuffer.length > 0) { pinBuffer = pinBuffer.slice(0,-1); updatePinDots(); }
-}
-
-function updatePinDots() {
-  for (let i = 0; i < 8; i++) {
-    const dot = document.getElementById('dot'+i);
-    if (!dot) continue;
-    dot.classList.toggle('filled', i < pinBuffer.length);
-    dot.classList.remove('error');
+  .mobile-hero-track {
+    position: relative;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: visible;
+    margin-bottom: 8px;
   }
-}
 
-function updatePinUI() {
-  const sub = document.getElementById('pinSub');
-  if (!sub) return;
-  if (pinMode === 'enter')   sub.textContent = 'Voer je 8-cijferige pincode in';
-  if (pinMode === 'setup')   sub.textContent = 'Kies een 8-cijferige pincode';
-  if (pinMode === 'confirm') sub.textContent = 'Bevestig je pincode';
-  updatePinDots();
-}
-
-async function handlePinComplete() {
-  if (pinMode === 'enter') {
-    document.getElementById('pinSub').textContent = 'Controleren...';
-    const stored = await getPinFromSheet();
-    if (hashPin(pinBuffer) === stored) {
-      pinAttempts = 0;
-      document.removeEventListener('keydown', onPinKeydown);
-      document.removeEventListener('focusin', preventFocusUnderPin);
-      const screen = document.getElementById('pinScreen');
-      screen.style.transition = 'opacity 0.3s ease';
-      screen.style.opacity = '0';
-      setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
-      // Geef de wachtende init()-functie vrij zodat de app pas nu gerenderd wordt
-      if (_pinUnlockResolve) { _pinUnlockResolve(); _pinUnlockResolve = null; }
-    } else {
-      pinAttempts++;
-      pinBuffer = '';
-      shakeDots();
-      if (pinAttempts >= PIN_MAX_ATTEMPTS) {
-        document.getElementById('pinForgot').style.display = 'block';
-        document.getElementById('pinSub').textContent = 'Te veel pogingen — wacht 30 seconden';
-        setTimeout(() => {
-          pinAttempts = 0;
-          document.getElementById('pinSub').textContent = 'Voer je 8-cijferige pincode in';
-        }, 30000);
-      } else {
-        document.getElementById('pinSub').textContent = `Verkeerd — nog ${PIN_MAX_ATTEMPTS - pinAttempts} poging${PIN_MAX_ATTEMPTS - pinAttempts !== 1 ? 'en' : ''}`;
-      }
-    }
-  } else if (pinMode === 'setup') {
-    pinTemp = pinBuffer;
-    pinBuffer = '';
-    pinMode = 'confirm';
-    updatePinUI();
-  } else if (pinMode === 'confirm') {
-    if (pinBuffer === pinTemp) {
-      document.getElementById('pinSub').textContent = 'Opslaan in Sheets...';
-      try {
-        await savePinToSheet(hashPin(pinBuffer));
-        pinBuffer = ''; pinTemp = '';
-        const screen = document.getElementById('pinScreen');
-        screen.style.transition = 'opacity 0.3s ease';
-        screen.style.opacity = '0';
-        setTimeout(() => { screen.style.display = 'none'; screen.style.opacity = ''; }, 300);
-        showToast('Pincode opgeslagen in Google Sheets!', 'success');
-        document.removeEventListener('keydown', onPinKeydown);
-      } catch(e) {
-        pinBuffer = ''; pinTemp = '';
-        pinMode = 'setup';
-        updatePinUI();
-      }
-    } else {
-      pinBuffer = ''; pinTemp = '';
-      pinMode = 'setup';
-      shakeDots();
-      document.getElementById('pinSub').textContent = 'Komt niet overeen — probeer opnieuw';
-    }
+  .mobile-hero-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--green);
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   }
-}
 
-function shakeDots() {
-  const dots = document.getElementById('pinDots');
-  dots.classList.remove('shake');
-  void dots.offsetWidth;
-  dots.classList.add('shake');
-  for (let i = 0; i < 8; i++) {
-    const dot = document.getElementById('dot'+i);
-    if (dot) dot.classList.add('error');
+  .mobile-hero-marker {
+    position: absolute;
+    top: -3px;
+    width: 3px;
+    height: 14px;
+    background: var(--text);
+    border-radius: 2px;
+    opacity: 0.5;
+    transform: translateX(-50%);
   }
-  setTimeout(() => { dots.classList.remove('shake'); updatePinDots(); }, 500);
-}
 
-async function pinReset() {
-  // Must verify current PIN via Sheets before resetting
-  pinBuffer = '';
-  pinTemp = '';
-  pinMode = 'enter';
-  const screen = document.getElementById('pinScreen');
-  screen.style.display = 'flex';
-  document.getElementById('pinSub').textContent = 'Voer huidige pincode in om te resetten';
-  document.getElementById('pinForgot').style.display = 'none';
-  // Override handlePinComplete temporarily
-  window._pinResetMode = true;
-  updatePinDots();
-  document.addEventListener('keydown', onPinKeydown);
-}
-
-async function setupPin() {
-  const screen = document.getElementById('pinScreen');
-  if (!screen) return;
-  pinMode = 'setup';
-  pinBuffer = ''; pinTemp = '';
-  updatePinUI();
-  screen.style.display = 'flex';
-  document.addEventListener('keydown', onPinKeydown);
-}
-
-
-/* ═══════════════════════════════════════════════
-   INIT
-   ═══════════════════════════════════════════════ */
-function repairTimestampDates() {
-  let repaired = 0;
-  state.transactions.forEach(t => {
-    if (t.date && t.date.includes('T')) {
-      // Gebruik UTC-datum uit de string direct (voor 22:00 UTC = 00:00 lokaal +2 uur, dus +1 dag)
-      const parts = t.date.split('T')[0];
-      // Maar controleer: als de tijd 22:00 of 23:00 is, was het door tijdzone-shift een dag te vroeg
-      const timeMatch = t.date.match(/T(\d{2}):/);
-      const hour = timeMatch ? parseInt(timeMatch[1]) : 0;
-      if (hour >= 22) {
-        // Was lokaal al de volgende dag — schuif een dag op
-        const d = new Date(parts + 'T12:00:00Z'); // gebruik 12:00 UTC om veilig te zijn
-        d.setDate(d.getDate() + 1);
-        t.date = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-      } else {
-        t.date = parts;
-      }
-      repaired++;
-    }
-  });
-  if (repaired > 0) {
-    console.log(`Gerepareerd: ${repaired} transacties met timestamp-datum omgezet naar lokale datum`);
-    saveState(true); // sla op zonder autoSync te triggeren
+  .mobile-hero-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 18px;
   }
-}
 
-async function init(){
-  loadState();
-  if(!state.recurring) state.recurring=[];
-  // Repareer eventuele datums die als ISO timestamp zijn opgeslagen (met T en tijdzone)
-  // Dit was veroorzaakt door de toISOString()-bug die inmiddels is opgelost
-  repairTimestampDates();
-  document.documentElement.setAttribute('data-theme',state.settings.theme);
-
-  // KRITIEK: app-inhoud blijft verborgen tot de PIN-check is afgerond.
-  // Dit voorkomt dat iemand het dashboard heel even ziet voordat het slotscherm verschijnt.
-  document.body.classList.add('app-locked');
-
-  await checkPinSetup(); // wacht tot dit klaar is — toont evt. het PIN-scherm en blokkeert verder
-
-  document.querySelectorAll('.currency-symbol').forEach(el=>el.textContent=state.settings.currency);
-  const txDateEl=document.getElementById('txDate');
-  if(txDateEl)txDateEl.value=today();
-  document.getElementById('sidebarMonth').textContent=monthName(new Date());
-  populateCatSelect('txCat');
-  populateCatSelect('budgetCat');
-  populateCatSelect('recCat');
-  updateCatFilter();
-  renderDashboard();
-  checkFirstVisit();
-  initAutoCategory();
-
-  document.body.classList.remove('app-locked');
-
-  setTimeout(()=>checkBudgetNotifications(), 1500);
-  if(!state.firstVisit && gsConfig.apiKey) {
-    setTimeout(()=>syncFromSheets(), 1000);
+  .mobile-hero-stats {
+    display: flex;
+    gap: 8px;
   }
-}
 
-document.addEventListener('DOMContentLoaded',init);
+  .mobile-stat {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+
+  .mobile-stat-val {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .mobile-stat-lbl {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 2px;
+  }
+
+  /* ── OP MOBIEL: verberg de zware dashboard-elementen ── */
+  #page-dashboard .kpi-grid { display: none; }
+  #page-dashboard .charts-row { display: none; }
+  #page-dashboard .bottom-row .health-card { display: none; }
+  #page-dashboard .bottom-row .burn-card { display: none; }
+  #page-dashboard .card[style*="margin-top"] { display: none; } /* maandvergelijking */
+
+  /* Recente transacties blijft — dat is nuttig op mobiel */
+  #page-dashboard .bottom-row { display: block; }
+  #page-dashboard .recent-card { display: block; margin-bottom: 0; }
+
+}
