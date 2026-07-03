@@ -95,6 +95,37 @@
         </div>
         <button class="btn-primary" onclick="openModal('addTransaction')">+ Transactie</button>
       </div>
+
+      <!-- ── MOBIELE HERO — alleen zichtbaar op mobiel ── -->
+      <div class="mobile-hero" id="mobileHero">
+        <div class="mobile-hero-label" id="mobileHeroLabel">Nog te besteden deze cyclus</div>
+        <div class="mobile-hero-amount" id="mobileHeroAmount">€0,00</div>
+        <div class="mobile-hero-ring-wrap">
+          <div class="mobile-hero-track">
+            <div class="mobile-hero-fill" id="mobileHeroFill"></div>
+            <div class="mobile-hero-marker" id="mobileHeroMarker" title="Vandaag"></div>
+          </div>
+          <div class="mobile-hero-meta">
+            <span id="mobileHeroSpent">€0 uitgegeven</span>
+            <span id="mobileHeroDays">— dagen te gaan</span>
+          </div>
+        </div>
+        <div class="mobile-hero-stats">
+          <div class="mobile-stat">
+            <div class="mobile-stat-val" id="mobileStatToday">€0</div>
+            <div class="mobile-stat-lbl">vandaag</div>
+          </div>
+          <div class="mobile-stat">
+            <div class="mobile-stat-val" id="mobileStatWeek">€0</div>
+            <div class="mobile-stat-lbl">deze week</div>
+          </div>
+          <div class="mobile-stat">
+            <div class="mobile-stat-val" id="mobileStatSaved">0%</div>
+            <div class="mobile-stat-lbl">gespaard</div>
+          </div>
+        </div>
+      </div>
+
       <div class="kpi-grid" id="kpiGrid">
         <div class="kpi-card kpi-income">
           <div class="kpi-top"><span class="kpi-label">Inkomsten</span><span class="kpi-icon income-icon">↑</span></div>
