@@ -324,6 +324,64 @@ function editTx(id) {
   setTimeout(()=>document.getElementById('txDesc').focus(), 50);
 }
 
+/* ═══════════════════════════════════════════════
+   AUTO-CATEGORISATIE
+   Leert van je transactiegeschiedenis: als je "Albert Heijn"
+   eerder als Boodschappen categoriseerde, stelt de app dat
+   automatisch voor bij een volgende invoer.
+   ═══════════════════════════════════════════════ */
+
+function suggestCategory(desc) {
+  if (!desc || desc.length < 2) return null;
+  const q = desc.toLowerCase().trim();
+
+  // Zoek exacte of gedeeltelijke matches in eerdere uitgaven
+  const matches = state.transactions
+    .filter(t => t.type === 'expense' && t.cat)
+    .filter(t => {
+      const d = t.desc.toLowerCase();
+      return d === q || d.includes(q) || q.includes(d);
+    });
+
+  if (!matches.length) return null;
+
+  // Tel welke categorie het vaakst voorkomt voor deze omschrijving
+  const counts = {};
+  matches.forEach(t => { counts[t.cat] = (counts[t.cat] || 0) + 1; });
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0] : null;
+}
+
+function initAutoCategory() {
+  const descEl = document.getElementById('txDesc');
+  const catEl  = document.getElementById('txCat');
+  if (!descEl || !catEl) return;
+
+  let userChangedCat = false;
+
+  // Als gebruiker zelf categorie wijzigt, niet meer overschrijven
+  catEl.addEventListener('change', () => { userChangedCat = true; });
+
+  descEl.addEventListener('input', () => {
+    if (userChangedCat || currentTxType !== 'expense') return;
+    const suggestion = suggestCategory(descEl.value);
+    if (suggestion && [...catEl.options].some(o => o.value === suggestion)) {
+      catEl.value = suggestion;
+      // Visuele feedback: kort oplichten
+      catEl.style.transition = 'border-color 0.3s';
+      catEl.style.borderColor = 'var(--green)';
+      setTimeout(() => { catEl.style.borderColor = ''; }, 800);
+    }
+  });
+
+  // Reset de flag als de modal opnieuw wordt geopend
+  const origOpenModal = window.openModal;
+  window.openModal = function(id) {
+    if (id === 'addTransaction') userChangedCat = false;
+    return origOpenModal.apply(this, arguments);
+  };
+}
+
 function saveTx() {
   const desc = document.getElementById('txDesc').value.trim();
   const amt  = parseFloat(document.getElementById('txAmount').value);
@@ -1086,8 +1144,35 @@ function computeMetrics() {
   tx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
   const dayProgress = Math.max(1, getCycleDayProgress());
   const totalDays = getCycleTotalDays();
+
+  /* ── Slimme projectie ──
+     Splits uitgaven in vaste lasten (die één keer per cyclus komen)
+     en variabele uitgaven (die per dag doorgaan). De projectie is dan:
+     al betaalde vaste lasten + nog verwachte vaste lasten (uit terugkerende
+     transacties) + variabele burn-rate doorgetrokken naar het einde. */
+  const fixedCatsSet = new Set(['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening']);
+  const fixedSpent    = tx.filter(t=>t.type==='expense'&&fixedCatsSet.has(t.cat)).reduce((a,t)=>a+t.amt,0);
+  const variableSpent = expense - fixedSpent;
+  const variableDaily = variableSpent / dayProgress;
+
+  // Verwachte nog-niet-betaalde terugkerende lasten binnen deze cyclus
+  const { start: cycStart, end: cycEnd } = getCurrentCycleRange();
+  const todayStr = today();
+  let upcomingFixed = 0;
+  (state.recurring||[]).filter(r=>r.type==='expense').forEach(r => {
+    // Bepaal de datum van deze terugkerende transactie binnen de cyclus
+    let recDate = new Date(cycStart.getFullYear(), cycStart.getMonth(), Math.min(r.day, 28));
+    if (recDate < cycStart) recDate = new Date(cycStart.getFullYear(), cycStart.getMonth()+1, Math.min(r.day, 28));
+    if (recDate > cycEnd) return; // valt buiten cyclus
+    const recStr = dateToStr(recDate);
+    if (recStr <= todayStr) return; // al geweest — zit in fixedSpent als hij is toegevoegd
+    // Check of hij niet al handmatig is ingevoerd
+    const alreadyIn = tx.some(t=>t.desc===r.desc&&t.amt===r.amt&&t.type==='expense');
+    if (!alreadyIn) upcomingFixed += r.amt;
+  });
+
   const burnDaily = expense / dayProgress;
-  const projected = burnDaily * totalDays;
+  const projected = fixedSpent + upcomingFixed + (variableDaily * totalDays);
   let score=0; const breakdown=[];
   if(income>0){
     const sr=balance/income;
@@ -1300,6 +1385,7 @@ function renderAnalytics(){
   if(charts.weekday)charts.weekday.destroy();
   charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,94,108,0.8)':'rgba(108,138,255,0.6)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
+  renderYearReport();
   renderInsights();
 }
 
@@ -1488,6 +1574,110 @@ function renderCycleCompare() {
   }).join('');
 }
 
+
+/* ═══════════════════════════════════════════════
+   JAAROVERZICHT
+   ═══════════════════════════════════════════════ */
+function renderYearReport() {
+  const sel = document.getElementById('yearReportSelect');
+  const el  = document.getElementById('yearReport');
+  if (!sel || !el) return;
+
+  // Vul jaren dropdown op basis van beschikbare data
+  const years = [...new Set(state.transactions.map(t => t.date.slice(0,4)))].sort().reverse();
+  if (!years.length) { el.innerHTML = '<div class="empty-state">Nog geen data</div>'; return; }
+
+  if (!sel.options.length || sel.options.length !== years.length) {
+    const current = sel.value;
+    sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    if (current && years.includes(current)) sel.value = current;
+  }
+
+  const year = sel.value || years[0];
+  const yearTx = state.transactions.filter(t => t.date.startsWith(year));
+
+  const income  = yearTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+  const expense = yearTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+  const saved   = income - expense;
+  const savedPct = income > 0 ? Math.round((saved/income)*100) : 0;
+
+  // Per maand analyse — beste en slechtste maand
+  const monthlyData = [];
+  for (let m = 1; m <= 12; m++) {
+    const prefix = `${year}-${String(m).padStart(2,'0')}`;
+    const mTx = yearTx.filter(t => t.date.startsWith(prefix));
+    const mInc = mTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+    const mExp = mTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+    if (mTx.length > 0) {
+      monthlyData.push({ month: m, income: mInc, expense: mExp, net: mInc - mExp,
+        name: new Date(parseInt(year), m-1, 1).toLocaleDateString('nl-NL',{month:'long'}) });
+    }
+  }
+
+  const bestMonth  = [...monthlyData].sort((a,b)=>b.net-a.net)[0];
+  const worstMonth = [...monthlyData].sort((a,b)=>a.net-b.net)[0];
+
+  // Top categorieën
+  const cats = {};
+  yearTx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
+  const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Aantal transacties en gemiddelde
+  const txCount = yearTx.filter(t=>t.type==='expense').length;
+  const avgTx   = txCount > 0 ? expense / txCount : 0;
+
+  el.innerHTML = `
+    <div class="year-report-grid">
+      <div class="year-stat">
+        <div class="year-stat-label">Totaal verdiend</div>
+        <div class="year-stat-value" style="color:var(--green)">${fmt(income)}</div>
+      </div>
+      <div class="year-stat">
+        <div class="year-stat-label">Totaal uitgegeven</div>
+        <div class="year-stat-value" style="color:var(--red)">${fmt(expense)}</div>
+      </div>
+      <div class="year-stat">
+        <div class="year-stat-label">Overgehouden</div>
+        <div class="year-stat-value" style="color:${saved>=0?'var(--green)':'var(--red)'}">${fmt(saved)} <small>(${savedPct}%)</small></div>
+      </div>
+      <div class="year-stat">
+        <div class="year-stat-label">Gem. per uitgave</div>
+        <div class="year-stat-value">${fmt(avgTx)} <small>(${txCount}x)</small></div>
+      </div>
+    </div>
+
+    ${monthlyData.length >= 2 ? `
+    <div class="year-months-row">
+      ${bestMonth ? `<div class="year-month-card best">
+        <span class="year-month-icon">🏆</span>
+        <div>
+          <div class="year-month-label">Beste maand</div>
+          <div class="year-month-name">${bestMonth.name}</div>
+          <div class="year-month-val" style="color:var(--green)">+${fmt(bestMonth.net)}</div>
+        </div>
+      </div>` : ''}
+      ${worstMonth && worstMonth !== bestMonth ? `<div class="year-month-card worst">
+        <span class="year-month-icon">📉</span>
+        <div>
+          <div class="year-month-label">Duurste maand</div>
+          <div class="year-month-name">${worstMonth.name}</div>
+          <div class="year-month-val" style="color:var(--red)">${fmt(worstMonth.net)}</div>
+        </div>
+      </div>` : ''}
+    </div>` : ''}
+
+    ${topCats.length ? `
+    <div class="year-topcats">
+      <div class="year-topcats-title">Top uitgaven categorieën</div>
+      ${topCats.map(([cat, amt], i) => `
+        <div class="year-topcat-row">
+          <span class="year-topcat-rank">${i+1}</span>
+          <span class="year-topcat-name">${catEmoji(cat)} ${cat}</span>
+          <span class="year-topcat-amt">${fmt(amt)}</span>
+        </div>`).join('')}
+    </div>` : ''}
+  `;
+}
 
 function renderInsights(){
   const{income,expense,balance,cats,burnDaily,projected}=computeMetrics();
@@ -2332,6 +2522,7 @@ async function init(){
   updateCatFilter();
   renderDashboard();
   checkFirstVisit();
+  initAutoCategory();
 
   document.body.classList.remove('app-locked');
 
