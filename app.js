@@ -1181,6 +1181,175 @@ function computeMetrics() {
 }
 
 /* ═══════════════════════════════════════════════
+   GELDCOACH — slimme observaties & bespaartips
+   Analyseert patronen in je uitgaven en geeft
+   concrete, persoonlijke adviezen.
+   ═══════════════════════════════════════════════ */
+function generateCoachTips() {
+  const tips = [];
+  const cycles = getLastNCycles(3);
+  const curr = cycles[cycles.length - 1];
+  const prev = cycles[cycles.length - 2];
+
+  const currTx = state.transactions.filter(t => curr.match(t));
+  const prevTx = prev ? state.transactions.filter(t => prev.match(t)) : [];
+
+  const income  = currTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
+  const expense = currTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+  const prevExp = prevTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+
+  // Categorieën deze en vorige cyclus
+  const cats = {}, prevCats = {};
+  currTx.filter(t=>t.type==='expense').forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
+  prevTx.filter(t=>t.type==='expense').forEach(t=>{prevCats[t.cat]=(prevCats[t.cat]||0)+t.amt;});
+
+  // ── 1. Abonnementen-analyse ──
+  const subs = currTx.filter(t=>t.type==='expense'&&t.cat==='Abonnementen');
+  const subTotal = subs.reduce((a,t)=>a+t.amt,0);
+  if (subs.length >= 4) {
+    const yearly = subTotal * 12;
+    tips.push({
+      type: 'warn',
+      icon: '📺',
+      title: `${subs.length} abonnementen = ${fmt(subTotal)}/maand`,
+      text: `Dat is <strong>${fmt(yearly)}</strong> per jaar. Loop ze eens langs — welke gebruik je echt nog? Eén opzeggen van ${fmt(subs[0].amt)}/mnd bespaart al ${fmt(subs[0].amt*12)}/jaar.`
+    });
+  }
+
+  // ── 2. Grootste stijger t.o.v. vorige cyclus ──
+  if (prevExp > 0) {
+    const risers = Object.entries(cats)
+      .map(([cat,amt])=>({cat,amt,prev:prevCats[cat]||0,diff:amt-(prevCats[cat]||0)}))
+      .filter(r=>r.prev>0 && r.diff>0)
+      .sort((a,b)=>b.diff-a.diff);
+    if (risers.length && risers[0].diff > 20) {
+      const r = risers[0];
+      const pctUp = Math.round((r.diff/r.prev)*100);
+      tips.push({
+        type: 'alert',
+        icon: '📈',
+        title: `${r.cat} steeg met ${pctUp}%`,
+        text: `Je gaf hier <strong>${fmt(r.diff)} meer</strong> uit dan vorige cyclus (${fmt(r.prev)} → ${fmt(r.amt)}). Bewuste keuze, of sluipt het erin?`
+      });
+    }
+  }
+
+  // ── 3. Uitgaven vs inkomen waarschuwing ──
+  if (income > 0) {
+    const ratio = expense / income;
+    if (ratio > 0.9) {
+      tips.push({
+        type: 'alert',
+        icon: '⚠️',
+        title: 'Je geeft bijna alles uit',
+        text: `Deze cyclus ging <strong>${Math.round(ratio*100)}%</strong> van je inkomen op. Probeer eerst ${fmt(income*0.1)} (10%) opzij te zetten zodra je salaris binnenkomt — betaal jezelf eerst.`
+      });
+    } else if (ratio < 0.6 && expense > 0) {
+      tips.push({
+        type: 'good',
+        icon: '🎉',
+        title: 'Sterke spaarcyclus!',
+        text: `Je hield <strong>${fmt(income-expense)}</strong> over (${Math.round((1-ratio)*100)}%). Overweeg dit automatisch naar een spaarrekening te zetten zodat je het niet per ongeluk uitgeeft.`
+      });
+    }
+  }
+
+  // ── 4. Kleine frequente uitgaven (het "latte-effect") ──
+  const smallFreq = currTx.filter(t=>t.type==='expense'&&t.amt<15);
+  if (smallFreq.length >= 8) {
+    const smallTotal = smallFreq.reduce((a,t)=>a+t.amt,0);
+    tips.push({
+      type: 'tip',
+      icon: '☕',
+      title: `${smallFreq.length} kleine uitgaven`,
+      text: `Al die kleine bedragen onder €15 tellen op tot <strong>${fmt(smallTotal)}</strong> deze cyclus. Kleine lekken zinken grote schepen — het loont om hier bewust op te letten.`
+    });
+  }
+
+  // ── 5. Vaste lasten aandeel ──
+  const fixedCats = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening'];
+  const fixed = currTx.filter(t=>t.type==='expense'&&fixedCats.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
+  if (income > 0 && fixed > 0) {
+    const fixedPct = Math.round((fixed/income)*100);
+    if (fixedPct > 55) {
+      tips.push({
+        type: 'warn',
+        icon: '🏠',
+        title: `Vaste lasten zijn ${fixedPct}% van je inkomen`,
+        text: `Dat is aan de hoge kant — vuistregel is max 50%. Je hebt weinig ruimte voor sparen of onverwachte kosten. De grootste winst zit vaak in energie, verzekeringen of je abonnementen heronderhandelen.`
+      });
+    }
+  }
+
+  // ── 6. Terugkerende dubbele omschrijvingen (mogelijk dubbel abonnement) ──
+  const descCounts = {};
+  currTx.filter(t=>t.type==='expense').forEach(t=>{
+    const key = t.desc.toLowerCase().trim();
+    descCounts[key] = (descCounts[key]||0)+1;
+  });
+  const doubles = Object.entries(descCounts).filter(([k,c])=>c>1 && k.length>2);
+  // (informatief, alleen als er echt iets opvalt — laten we streaming-achtige namen niet forceren)
+
+  // ── 7. Positieve nudge als er weinig data is ──
+  if (tips.length === 0) {
+    if (expense === 0) {
+      tips.push({
+        type: 'tip',
+        icon: '👋',
+        title: 'Nog geen uitgaven deze cyclus',
+        text: 'Voeg je uitgaven toe en je geldcoach begint patronen te herkennen en persoonlijke bespaartips te geven.'
+      });
+    } else {
+      tips.push({
+        type: 'good',
+        icon: '✅',
+        title: 'Alles ziet er gezond uit',
+        text: `Je uitgaven zijn in balans deze cyclus. Blijf zo doorgaan — consistentie is de sleutel tot financiële rust.`
+      });
+    }
+  }
+
+  return tips;
+}
+
+function renderCoach() {
+  const tips = generateCoachTips();
+
+  // Volledige coach op Analytics
+  const el = document.getElementById('coachTips');
+  if (el) {
+    el.innerHTML = tips.map(t => `
+      <div class="coach-tip coach-tip-${t.type}">
+        <span class="coach-tip-icon">${t.icon}</span>
+        <div class="coach-tip-body">
+          <div class="coach-tip-title">${t.title}</div>
+          <div class="coach-tip-text">${t.text}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Compacte toptip op dashboard (alleen de belangrijkste)
+  const dashCard = document.getElementById('dashCoachCard');
+  const dashTip  = document.getElementById('dashCoachTip');
+  if (dashCard && dashTip && tips.length) {
+    // Prioriteit: alert > warn > tip > good
+    const priority = { alert: 0, warn: 1, tip: 2, good: 3 };
+    const top = [...tips].sort((a,b)=>priority[a.type]-priority[b.type])[0];
+    dashTip.innerHTML = `
+      <div class="coach-tip coach-tip-${top.type}">
+        <span class="coach-tip-icon">${top.icon}</span>
+        <div class="coach-tip-body">
+          <div class="coach-tip-title">${top.title}</div>
+          <div class="coach-tip-text">${top.text}</div>
+        </div>
+      </div>`;
+    dashCard.style.display = '';
+  } else if (dashCard) {
+    dashCard.style.display = 'none';
+  }
+}
+
+/* ═══════════════════════════════════════════════
    MOBIELE HERO — "nog te besteden" als hoofdgetal
    ═══════════════════════════════════════════════ */
 function renderMobileHero() {
@@ -1295,6 +1464,7 @@ function renderDashboard(){
   document.getElementById('txPageSub').textContent=state.transactions.length+' transacties in totaal';
   renderMonthComparison();
   renderMobileHero();
+  renderCoach();
 }
 
 /* ═══════════════════════════════════════════════
