@@ -2814,3 +2814,65 @@ body.app-locked .pin-screen {
   #page-dashboard .recent-card { display: block; margin-bottom: 0; }
 
 }
+
+/* ═══════════════════════════════════════════════
+   GELDCOACH
+   ═══════════════════════════════════════════════ */
+.coach-card {
+  margin-bottom: 14px;
+}
+
+.coach-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.coach-icon { font-size: 20px; }
+
+.coach-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.coach-tip {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--bg3);
+  border-left: 3px solid var(--border-strong);
+}
+
+.coach-tip-alert { border-left-color: var(--red); }
+.coach-tip-warn  { border-left-color: var(--amber); }
+.coach-tip-tip   { border-left-color: var(--accent); }
+.coach-tip-good  { border-left-color: var(--green); }
+
+.coach-tip-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.coach-tip-body { flex: 1; }
+
+.coach-tip-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.coach-tip-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text2);
+}
+
+.coach-tip-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
