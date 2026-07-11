@@ -28,6 +28,7 @@ let state = {
   adventure: {
     xp: 0,                    // totale ervaring, bepaalt level 1-100
     pathPosition: 0,          // huidige halte op het pad
+    pathSteps: 0,             // geslaagde missies binnen de huidige halte
     cityLevel: 0,             // stad groeit, krimpt NOOIT
     unlockedBadges: [],
     currentMission: null,     // { id, weekStart, weekEnd, config }
@@ -2734,10 +2735,11 @@ async function init(){
   loadState();
   if(!state.recurring) state.recurring=[];
   if(!state.adventure) state.adventure = {
-    xp: 0, pathPosition: 0, cityLevel: 0, unlockedBadges: [],
+    xp: 0, pathPosition: 0, pathSteps: 0, cityLevel: 0, unlockedBadges: [],
     currentMission: null, missionHistory: [], lastCycleReport: null,
     stats: { missionsCompleted: 0, missionsFailed: 0, streak: 0, bestStreak: 0 }
   };
+  if(state.adventure.pathSteps === undefined) state.adventure.pathSteps = 0;
   if(!state.adventure.stats) state.adventure.stats = { missionsCompleted:0, missionsFailed:0, streak:0, bestStreak:0 };
   if(!state.adventure.missionHistory) state.adventure.missionHistory = [];
   // Repareer eventuele datums die als ISO timestamp zijn opgeslagen (met T en tijdzone)
