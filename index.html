@@ -493,6 +493,44 @@
         </div>
 
         <div class="card settings-card">
+          <div class="settings-section-title">Je betaalrekening</div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Beginsaldo</div>
+              <div class="setting-desc">
+                Wat stond er op je betaalrekening op de startdatum? Vanaf dat punt
+                rekent de app je werkelijke saldo door — inclusief transfers, want
+                die zijn wél van je rekening af.
+              </div>
+            </div>
+            <div class="inline-input-row">
+              <input type="number" step="0.01" class="filter-select" id="openingBalInput" placeholder="0,00" style="width:110px" />
+              <input type="date" class="filter-select" id="openingDateInput" style="width:150px" />
+              <button class="btn-primary-sm" onclick="saveOpeningBalance()">Opslaan</button>
+            </div>
+          </div>
+
+          <div class="setting-row" style="border-bottom:none">
+            <div class="setting-info">
+              <div class="setting-name">Naam betaalrekening</div>
+              <div class="setting-desc">
+                Optioneel. Vul je rekeningnummer of -naam in zoals je die bij transfers
+                gebruikt (bijv. 144894971). Dan weet de app welke transfers erúit gaan
+                en welke erín komen. Laat je dit leeg, dan neemt hij aan dat alle
+                transfers de rekening verlaten.
+              </div>
+            </div>
+            <div class="inline-input-row">
+              <input type="text" class="filter-select" id="checkingNameInput" placeholder="144894971" style="width:150px" />
+              <button class="btn-primary-sm" onclick="saveCheckingName()">Opslaan</button>
+            </div>
+          </div>
+
+          <div id="bankPreview" class="bank-preview"></div>
+        </div>
+
+        <div class="card settings-card">
           <div class="settings-section-title">Beveiliging</div>
           <div class="setting-row" style="border-bottom:none">
             <div class="setting-info">
