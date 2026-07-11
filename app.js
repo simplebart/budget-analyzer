@@ -1558,14 +1558,24 @@ function renderDashboard(){
   document.getElementById('boardOut').textContent  = fmt(expense);
   document.getElementById('boardBurn').textContent = fmt(burnDaily);
 
-  /* Staat er een banksaldo? Dan is 'overgehouden' de interessante stroom.
-     Zo niet, dan tonen we het spaarpercentage zoals voorheen. */
+  /* Het vierde cijfer moet het heldgetal VERKLAREN, niet ermee
+     concurreren. Met een banksaldo is dat 'Weggezet': dan leest de rij
+     als de rekensom eronder —
+         beginsaldo + Binnen − Eruit − Weggezet = je saldo.
+     Zonder banksaldo is er niets te verklaren; dan is het spaar-
+     percentage het nuttigst. */
   const savedEl  = document.getElementById('boardSaved');
   const savedLbl = savedEl.previousElementSibling;
+
   if (hasBank) {
-    savedEl.textContent = fmt(kept);
-    savedEl.style.color = kept >= 0 ? 'var(--jade)' : 'var(--ember)';
-    if (savedLbl) savedLbl.textContent = 'Overgehouden';
+    const moved = getCurrentMonthTx()
+      .filter(t => t.type === 'transfer' && transferDirection(t) === 'out')
+      .reduce((a, t) => a + t.amt, 0);
+
+    savedEl.textContent = fmt(moved);
+    savedEl.style.color = moved > 0 ? 'var(--lilac)' : '';
+    if (savedLbl) savedLbl.textContent = 'Weggezet';
+    savedEl.title = 'Naar spaarrekeningen en beleggingen — niet uitgegeven, wel van je rekening af';
   } else {
     savedEl.textContent = income > 0
       ? Math.max(0, Math.round((balance / income) * 100)) + '%' : '—';
