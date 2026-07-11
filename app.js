@@ -12,16 +12,16 @@ let state = {
     transactions: []    // [{ id, accountId, type:'deposit'|'withdrawal'|'interest', amt, date, desc }]
   },
   categories: [
-    { name:'Wonen',          emoji:'🏠', color:'#6c8aff', deletable:false },
-    { name:'Boodschappen',   emoji:'🛒', color:'#34d48a', deletable:false },
-    { name:'Transport',      emoji:'🚌', color:'#ffb340', deletable:false },
-    { name:'Eten & Drinken', emoji:'🍽', color:'#ff5e6c', deletable:false },
-    { name:'Gezondheid',     emoji:'💊', color:'#a78bfa', deletable:false },
-    { name:'Vrije tijd',     emoji:'🎮', color:'#f472b6', deletable:false },
-    { name:'Abonnementen',   emoji:'📱', color:'#fb923c', deletable:false },
-    { name:'Kleding',        emoji:'👕', color:'#22d3ee', deletable:false },
-    { name:'Sparen',         emoji:'💰', color:'#4ade80', deletable:false },
-    { name:'Overig',         emoji:'📦', color:'#94a3b8', deletable:false },
+    { name:'Wonen',          emoji:'🏠', color:'#8B7FF7', deletable:false },
+    { name:'Boodschappen',   emoji:'🛒', color:'#2FCB8B', deletable:false },
+    { name:'Transport',      emoji:'🚌', color:'#E9A83C', deletable:false },
+    { name:'Eten & Drinken', emoji:'🍽', color:'#FF6A4D', deletable:false },
+    { name:'Gezondheid',     emoji:'💊', color:'#8B7FF7', deletable:false },
+    { name:'Vrije tijd',     emoji:'🎮', color:'#E87BC7', deletable:false },
+    { name:'Abonnementen',   emoji:'📱', color:'#FFA36B', deletable:false },
+    { name:'Kleding',        emoji:'👕', color:'#5FD3E8', deletable:false },
+    { name:'Sparen',         emoji:'💰', color:'#7BE0B0', deletable:false },
+    { name:'Overig',         emoji:'📦', color:'#8B84AC', deletable:false },
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1 },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
@@ -40,7 +40,7 @@ let state = {
   firstVisit: true,
   filters: { type:'all', cat:'all', sort:'date-desc', search:'' },
   analyticsPeriod: 'month',
-  selectedGoalColor: '#6c8aff'
+  selectedGoalColor: '#8B7FF7'
 };
 
 let charts = {};
@@ -50,8 +50,8 @@ let csvParsed = { headers:[], rows:[], mapping:{}, finalRows:[] };
 let csvStep = 1;
 let selectedBank = 'auto';
 
-const GOAL_COLORS = ['#6c8aff','#34d48a','#ffb340','#ff5e6c','#a78bfa','#f472b6','#fb923c','#22d3ee'];
-const SAVINGS_COLORS = ['#34d48a','#6c8aff','#ffb340','#f472b6','#a78bfa','#22d3ee','#fb923c','#ff5e6c'];
+const GOAL_COLORS = ['#8B7FF7','#2FCB8B','#E9A83C','#FF6A4D','#8B7FF7','#E87BC7','#FFA36B','#5FD3E8'];
+const SAVINGS_COLORS = ['#2FCB8B','#8B7FF7','#E9A83C','#E87BC7','#8B7FF7','#5FD3E8','#FFA36B','#FF6A4D'];
 
 /* ═══════════════════════════════════════════════
    UTILS
@@ -159,7 +159,7 @@ function getLastNCycles(n) {
   }
   return cycles;
 }
-const catColor = name => (state.categories.find(c=>c.name===name)||{color:'#94a3b8'}).color;
+const catColor = name => (state.categories.find(c=>c.name===name)||{color:'#8B84AC'}).color;
 const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'}).emoji;
 
 /* ═══════════════════════════════════════════════
@@ -208,6 +208,7 @@ function navigate(page) {
   document.getElementById('page-'+page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(el=>el.classList.add('active'));
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page]||page;
+  if (typeof renderHUD === 'function') renderHUD();
   // Show/hide topbar action button based on page
   const actionBtn = document.getElementById('topbarAction');
   if (actionBtn) {
@@ -605,7 +606,7 @@ function deleteGoal(id) { state.goals=state.goals.filter(g=>g.id!==id); saveStat
 /* ═══════════════════════════════════════════════
    SAVINGS ACCOUNTS
    ═══════════════════════════════════════════════ */
-let selectedSavingsColor = '#34d48a';
+let selectedSavingsColor = '#2FCB8B';
 
 function renderSavingsColorPicker() {
   const wrap = document.getElementById('savAccColorPicker');
@@ -748,7 +749,7 @@ function renderSavings() {
         <tbody>${allTx.map(t=>{
           const acc = state.savings.accounts.find(a=>a.id===t.accountId);
           const accName = acc?acc.name:'?';
-          const accColor = acc?acc.color:'#94a3b8';
+          const accColor = acc?acc.color:'#8B84AC';
           const isPos = t.type!=='withdrawal';
           const typeLabel = t.type==='deposit'?'Storting':t.type==='withdrawal'?'Opname':'Rente';
           const typeColor = t.type==='deposit'?'var(--green)':t.type==='interest'?'var(--accent)':'var(--red)';
@@ -1483,12 +1484,19 @@ function renderDashboard(){
 /* ═══════════════════════════════════════════════
    CHARTS HELPERS
    ═══════════════════════════════════════════════ */
+/* Grafiekkleuren komen uit de tokens, zodat licht en donker
+   automatisch meelopen met het palet. */
 function chartColors(){
-  return{
-    grid:state.settings.theme==='light'?'rgba(0,0,0,0.05)':'rgba(255,255,255,0.05)',
-    text:state.settings.theme==='light'?'#9090a8':'#5a5a72'
+  const light = state.settings.theme === 'light';
+  return {
+    grid: light ? 'rgba(27,22,56,0.07)'  : 'rgba(242,237,227,0.06)',
+    text: light ? '#8B84AC'              : '#6F678F'
   };
 }
+
+/* De standaard categoriekleuren van het palet — gebruikt als een
+   categorie geen eigen kleur heeft. */
+const PALETTE = ['#8B7FF7','#2FCB8B','#FF6A4D','#E9A83C','#5FD3E8','#E87BC7','#7BE0B0','#FFA36B'];
 
 function renderCashflowChart(){
   const{grid,text}=chartColors();
@@ -1500,8 +1508,8 @@ function renderCashflowChart(){
 
   const ctx=document.getElementById('cashflowChart').getContext('2d');
   if(charts.cashflow)charts.cashflow.destroy();
-  charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(52,212,138,0.75)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,94,108,0.75)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(167,139,250,0.65)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>cycles[items[0].dataIndex].fullLabel,label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('cashflowLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'},{label:'Transfers',color:'#a78bfa'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+  charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(47,203,139,0.78)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,106,77,0.78)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(139,127,247,0.70)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>cycles[items[0].dataIndex].fullLabel,label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  document.getElementById('cashflowLegend').innerHTML=[{label:'Inkomsten',color:'#2FCB8B'},{label:'Uitgaven',color:'#FF6A4D'},{label:'Transfers',color:'#8B7FF7'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
 }
 
 function renderDonutChart(cats){
@@ -1511,7 +1519,7 @@ function renderDonutChart(cats){
   const ctx=document.getElementById('donutChart').getContext('2d');
   if(charts.donut)charts.donut.destroy();
   if(!entries.length){document.getElementById('donutLegend').innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center">Geen uitgaven</div>';return;}
-  charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map(([k])=>catColor(k)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#16161d',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
+  charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map(([k])=>catColor(k)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#16122E',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
   document.getElementById('donutLegend').innerHTML=entries.slice(0,6).map(([k,v])=>`<div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:${catColor(k)}"></span>${k}</span><span class="donut-leg-amt">${fmt(v)}</span></div>`).join('');
 }
 
@@ -1593,10 +1601,10 @@ function renderAnalytics(){
   const ctx1=document.getElementById('incExpChart').getContext('2d');
   if(charts.incExp)charts.incExp.destroy();
   charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[
-    {label:'Inkomsten',data:incArr,borderColor:'#34d48a',backgroundColor:'rgba(52,212,138,0.08)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#34d48a'},
-    {label:'Uitgaven', data:expArr,borderColor:'#ff5e6c',backgroundColor:'rgba(255,94,108,0.08)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#ff5e6c'}
+    {label:'Inkomsten',data:incArr,borderColor:'#2FCB8B',backgroundColor:'rgba(47,203,139,0.10)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#2FCB8B'},
+    {label:'Uitgaven', data:expArr,borderColor:'#FF6A4D',backgroundColor:'rgba(255,106,77,0.10)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#FF6A4D'}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:'#34d48a'},{label:'Uitgaven',color:'#ff5e6c'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:'#2FCB8B'},{label:'Uitgaven',color:'#FF6A4D'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
 
   // ── Categorie trend ──
   const topCats=Object.entries(state.transactions.filter(t=>t.type==='expense').reduce((a,t)=>{a[t.cat]=(a[t.cat]||0)+t.amt;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
@@ -1608,7 +1616,7 @@ function renderAnalytics(){
   const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
   const ctx3=document.getElementById('savingsRateChart').getContext('2d');
   if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(52,212,138,0.75)':v>=0?'rgba(255,179,64,0.75)':'rgba(255,94,108,0.75)'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(47,203,139,0.78)':v>=0?'rgba(233,168,60,0.78)':'rgba(255,106,77,0.78)'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
 
   // ── Weekdag patroon ──
   const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
@@ -1616,7 +1624,7 @@ function renderAnalytics(){
   const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
   const ctx4=document.getElementById('weekdayChart').getContext('2d');
   if(charts.weekday)charts.weekday.destroy();
-  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,94,108,0.8)':'rgba(108,138,255,0.6)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,106,77,0.80)':'rgba(139,127,247,0.65)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   renderYearReport();
   renderInsights();
@@ -1755,7 +1763,7 @@ function renderFixedVarChart(grid, text) {
       labels:['Vaste lasten','Variabel'],
       datasets:[{
         data:[Math.round(fixed),Math.round(variable)],
-        backgroundColor:['rgba(108,138,255,0.8)','rgba(52,212,138,0.8)'],
+        backgroundColor:['rgba(139,127,247,0.80)','rgba(47,203,139,0.80)'],
         borderWidth:2,
         borderColor: 'var(--bg2)',
         hoverOffset:6
@@ -1768,8 +1776,8 @@ function renderFixedVarChart(grid, text) {
   if (legEl) {
     const total = fixed + variable;
     legEl.innerHTML = `
-      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(108,138,255,0.8)"></span>Vaste lasten</span><span class="donut-leg-amt">${fmt(fixed)} <small style="color:var(--text3)">${Math.round(fixed/total*100)}%</small></span></div>
-      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(52,212,138,0.8)"></span>Variabel</span><span class="donut-leg-amt">${fmt(variable)} <small style="color:var(--text3)">${Math.round(variable/total*100)}%</small></span></div>`;
+      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(139,127,247,0.80)"></span>Vaste lasten</span><span class="donut-leg-amt">${fmt(fixed)} <small style="color:var(--text3)">${Math.round(fixed/total*100)}%</small></span></div>
+      <div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:rgba(47,203,139,0.80)"></span>Variabel</span><span class="donut-leg-amt">${fmt(variable)} <small style="color:var(--text3)">${Math.round(variable/total*100)}%</small></span></div>`;
   }
 }
 
@@ -2197,7 +2205,7 @@ function debugCycles() {
     const endStr = dateToStr(c.end);
     const tx = state.transactions.filter(t => c.match(t));
     const exp = tx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
-    console.log(`%c[${idx}] ${c.label} (${startStr} t/m ${endStr}) — ${tx.length} tx — uitgaven: €${exp.toFixed(2)}`, 'font-weight:bold;color:#6c8aff');
+    console.log(`%c[${idx}] ${c.label} (${startStr} t/m ${endStr}) — ${tx.length} tx — uitgaven: €${exp.toFixed(2)}`, 'font-weight:bold;color:#8B7FF7');
     tx.filter(t => t.type === 'expense').forEach(t => {
       console.log(`   ${t.date} | ${t.desc} | €${t.amt}`);
     });
@@ -2229,7 +2237,7 @@ async function syncFromSheets() {
     if (goalRows.length > 1) {
       state.goals = goalRows.slice(1).filter(r=>r[0]).map(r=>({
         id:Number(r[0]), name:r[1]||'', target:parseFloat(r[2])||0,
-        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#6c8aff'
+        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#8B7FF7'
       }));
     }
 
@@ -2237,7 +2245,7 @@ async function syncFromSheets() {
     if (savAccRows.length > 1) {
       state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r=>({
         id:Number(r[0]), name:r[1]||'', balance:parseFloat(r[2])||0,
-        target:parseFloat(r[3])||0, color:r[4]||'#34d48a', note:r[5]||''
+        target:parseFloat(r[3])||0, color:r[4]||'#2FCB8B', note:r[5]||''
       }));
     }
 
@@ -2252,7 +2260,7 @@ async function syncFromSheets() {
     const catRows = await gsGet(SHEET_TABS.categories);
     if (catRows.length > 1) {
       state.categories = catRows.slice(1).filter(r=>r[0]).map(r=>({
-        name:r[0], emoji:r[1]||'📦', color:r[2]||'#94a3b8', deletable:r[3]==='1'
+        name:r[0], emoji:r[1]||'📦', color:r[2]||'#8B84AC', deletable:r[3]==='1'
       }));
     }
 
@@ -2820,6 +2828,7 @@ async function init(){
   // Avontuur: zorg dat er een missie loopt, evalueer afgelopen week, toon cyclusrapport
   if (typeof ensureMission === 'function') {
     ensureMission();
+    if (typeof renderHUD === 'function') renderHUD();
     if (typeof checkCycleReport === 'function') checkCycleReport();
   }
 
