@@ -3194,3 +3194,31 @@ body.app-locked .pin-screen { visibility: visible; }
   color: var(--lilac);
   margin-bottom: 5px;
 }
+
+/* ── De donutkaart op het dashboard ──
+   De categorielijst ernaast is de legenda; hier alleen de ring
+   met het totaal in het hart. */
+.donut-card {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+}
+
+.donut-card .donut-wrap {
+  width: 210px;
+  height: 210px;
+  margin: 0;
+}
+.donut-card .donut-wrap canvas {
+  width: 210px !important;
+  height: 210px !important;
+}
+
+@media (max-width: 620px) {
+  .donut-card { min-height: 0; }
+  .donut-card .donut-wrap,
+  .donut-card .donut-wrap canvas {
+    width: 180px !important;
+    height: 180px !important;
+  }
+}
