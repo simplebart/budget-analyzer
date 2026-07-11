@@ -23,7 +23,8 @@ let state = {
     { name:'Sparen',         emoji:'💰', color:'#7BE0B0', deletable:false },
     { name:'Overig',         emoji:'📦', color:'#8B84AC', deletable:false },
   ],
-  settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1 },
+  settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1,
+              checkingName:'', openingBalance:null, openingDate:'' },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
   adventure: {
     xp: 0,                    // totale ervaring, bepaalt level 1-100
@@ -1124,6 +1125,71 @@ function setTheme(theme) {
 function setCurrency(sym) { state.settings.currency=sym; document.querySelectorAll('.currency-symbol').forEach(el=>el.textContent=sym); saveState(); renderDashboard(); }
 function saveIncome() { const v=parseFloat(document.getElementById('incomeInput').value); if(v>0){state.settings.monthlyIncome=v;saveState();renderDashboard();} }
 
+
+function saveOpeningBalance() {
+  const bal  = parseFloat(document.getElementById('openingBalInput').value);
+  const date = document.getElementById('openingDateInput').value;
+
+  if (isNaN(bal))  { showToast('Vul een beginsaldo in.', 'warn'); return; }
+  if (!date)       { showToast('Kies de datum waarop dat saldo gold.', 'warn'); return; }
+
+  state.settings.openingBalance = bal;
+  state.settings.openingDate    = date;
+  saveState();
+  renderSettings();
+  renderDashboard();
+  showToast('Beginsaldo opgeslagen. Je saldo wordt nu doorgerekend.', 'success');
+}
+
+function saveCheckingName() {
+  state.settings.checkingName = document.getElementById('checkingNameInput').value.trim();
+  saveState();
+  renderSettings();
+  renderDashboard();
+  showToast(state.settings.checkingName
+    ? 'Betaalrekening ingesteld.'
+    : 'Naam gewist — alle transfers gelden weer als uitgaand.', 'success');
+}
+
+/* Laat zien hoe de app aan het saldo komt, zodat het navolgbaar is */
+function renderBankPreview() {
+  const el = document.getElementById('bankPreview');
+  if (!el) return;
+
+  if (!hasBankSetup()) {
+    el.innerHTML = `<div class="bank-preview-empty">
+      Nog geen beginsaldo. Het speelbord toont daarom wat je deze cyclus
+      <strong>overhield</strong> — niet wat er op je rekening staat.
+    </div>`;
+    return;
+  }
+
+  const s     = state.settings;
+  const since = s.openingDate;
+  const tx    = state.transactions.filter(t => t.date >= since);
+
+  const inc  = tx.filter(t => t.type === 'income').reduce((a,t) => a + t.amt, 0);
+  const exp  = tx.filter(t => t.type === 'expense').reduce((a,t) => a + t.amt, 0);
+  const out  = tx.filter(t => t.type === 'transfer' && transferDirection(t) === 'out')
+                 .reduce((a,t) => a + t.amt, 0);
+  const inn  = tx.filter(t => t.type === 'transfer' && transferDirection(t) === 'in')
+                 .reduce((a,t) => a + t.amt, 0);
+
+  const saldo = computeBankBalance();
+  const d = new Date(since + 'T12:00:00').toLocaleDateString('nl-NL',
+              { day:'numeric', month:'long', year:'numeric' });
+
+  el.innerHTML = `
+    <div class="bank-preview-title">Zo komt de app aan je saldo</div>
+    <div class="bank-row"><span>Beginsaldo op ${d}</span><span>${fmt(s.openingBalance)}</span></div>
+    <div class="bank-row"><span>Inkomsten sindsdien</span><span class="pos">+${fmt(inc)}</span></div>
+    <div class="bank-row"><span>Uitgaven sindsdien</span><span class="neg">−${fmt(exp)}</span></div>
+    ${out ? `<div class="bank-row"><span>Weggeboekt (transfers eruit)</span><span class="neg">−${fmt(out)}</span></div>` : ''}
+    ${inn ? `<div class="bank-row"><span>Binnengekomen (transfers erin)</span><span class="pos">+${fmt(inn)}</span></div>` : ''}
+    <div class="bank-row total"><span>Op je betaalrekening</span><span>${saldo < 0 ? '−' : ''}${fmt(Math.abs(saldo))}</span></div>
+  `;
+}
+
 function saveCycleStart() {
   const v = parseInt(document.getElementById('cycleStartInput').value);
   if (v >= 1 && v <= 28) {
@@ -1148,6 +1214,60 @@ function clearAllData() {
   state.transactions=[]; state.budgets={}; state.goals=[]; state.savings={accounts:[],transactions:[]};
   saveState(); navigate('dashboard');
 }
+
+/* ═══════════════════════════════════════════════════════════
+   HET BANKSALDO — een voorraad, geen stroom
+   De app kende alleen bewegingen, geen vertrekpunt. Met een
+   beginsaldo kan hij uitrekenen wat er écht op je rekening staat.
+
+   Transfers zijn hier wél van belang: dat geld is niet uitgegeven,
+   maar het is wel van je betaalrekening af.
+   ═══════════════════════════════════════════════════════════ */
+function hasBankSetup() {
+  const s = state.settings;
+  return s.openingBalance !== null && s.openingBalance !== undefined && !!s.openingDate;
+}
+
+/* Raakt deze transfer de betaalrekening, en in welke richting? */
+function transferDirection(t) {
+  const naam = (state.settings.checkingName || '').trim().toLowerCase();
+  const from = (t.fromAccount || '').trim().toLowerCase();
+  const to   = (t.toAccount   || '').trim().toLowerCase();
+
+  // Geen rekeningnaam ingesteld? Dan is de aanname: transfers gaan de
+  // betaalrekening uit. Dat is het gangbare patroon (sparen, beleggen).
+  if (!naam) return 'out';
+
+  const fromIsChecking = from.includes(naam);
+  const toIsChecking   = to.includes(naam);
+
+  if (fromIsChecking && !toIsChecking) return 'out';   // eraf
+  if (toIsChecking && !fromIsChecking) return 'in';    // erbij
+  return 'none';                                        // raakt de rekening niet
+}
+
+function computeBankBalance() {
+  if (!hasBankSetup()) return null;
+
+  const s     = state.settings;
+  const since = s.openingDate;
+  let saldo   = Number(s.openingBalance) || 0;
+
+  state.transactions
+    .filter(t => t.date >= since)
+    .forEach(t => {
+      if (t.type === 'income')  saldo += t.amt;
+      if (t.type === 'expense') saldo -= t.amt;
+      if (t.type === 'transfer') {
+        const dir = transferDirection(t);
+        if (dir === 'out') saldo -= t.amt;
+        if (dir === 'in')  saldo += t.amt;
+      }
+    });
+
+  return Math.round(saldo * 100) / 100;
+}
+
 /* ═══════════════════════════════════════════════
    COMPUTE METRICS
    ═══════════════════════════════════════════════ */
@@ -1396,15 +1516,25 @@ function renderDashboard(){
   const dayProgress = Math.max(1, Math.min(totalDays, getCycleDayProgress()));
   const daysLeft    = Math.max(0, totalDays - dayProgress);
 
-  /* ── HET SPEELBORD ── */
-  const remaining = income - expense;
-  const over      = remaining < 0;
+  /* ── HET SPEELBORD ──
+     Het heldgetal is wat er ÉCHT op je betaalrekening staat, want dat
+     is wat je kunt uitgeven. Heb je geen beginsaldo ingesteld, dan valt
+     de app terug op wat je deze cyclus overhield — met een eerlijk label,
+     zodat het niet klinkt als een banksaldo. */
+  const bank      = computeBankBalance();
+  const kept      = income - expense;          // een STROOM: wat je overhield
+  const hasBank   = bank !== null;
+
+  const hero      = hasBank ? bank : kept;
+  const over      = hero < 0;
 
   document.getElementById('boardEyebrow').textContent =
-    over ? 'Over budget deze cyclus' : 'Nog te besteden';
+    hasBank
+      ? (over ? 'Je staat rood' : 'Op je betaalrekening')
+      : (over ? 'Meer uitgegeven dan verdiend' : 'Overgehouden deze cyclus');
 
   const amtEl = document.getElementById('boardAmount');
-  amtEl.textContent = (over ? '−' : '') + fmt(Math.abs(remaining));
+  amtEl.textContent = (over ? '−' : '') + fmt(Math.abs(hero));
   amtEl.style.color = over ? 'var(--ember)' : 'var(--chalk)';
 
   // De cyclusmeter: hoeveel van je inkomen is nog niet uitgegeven
@@ -1424,11 +1554,24 @@ function renderDashboard(){
   document.getElementById('boardDays').textContent  =
     daysLeft === 0 ? 'laatste dag' : `nog ${daysLeft} ${daysLeft === 1 ? 'dag' : 'dagen'}`;
 
-  document.getElementById('boardIn').textContent    = fmt(income);
-  document.getElementById('boardOut').textContent   = fmt(expense);
-  document.getElementById('boardBurn').textContent  = fmt(burnDaily);
-  document.getElementById('boardSaved').textContent =
-    income > 0 ? Math.max(0, Math.round((balance / income) * 100)) + '%' : '—';
+  document.getElementById('boardIn').textContent   = fmt(income);
+  document.getElementById('boardOut').textContent  = fmt(expense);
+  document.getElementById('boardBurn').textContent = fmt(burnDaily);
+
+  /* Staat er een banksaldo? Dan is 'overgehouden' de interessante stroom.
+     Zo niet, dan tonen we het spaarpercentage zoals voorheen. */
+  const savedEl  = document.getElementById('boardSaved');
+  const savedLbl = savedEl.previousElementSibling;
+  if (hasBank) {
+    savedEl.textContent = fmt(kept);
+    savedEl.style.color = kept >= 0 ? 'var(--jade)' : 'var(--ember)';
+    if (savedLbl) savedLbl.textContent = 'Overgehouden';
+  } else {
+    savedEl.textContent = income > 0
+      ? Math.max(0, Math.round((balance / income) * 100)) + '%' : '—';
+    savedEl.style.color = '';
+    if (savedLbl) savedLbl.textContent = 'Gespaard';
+  }
 
   /* ── De volgende zet: de missie ── */
   renderBoardQuest();
@@ -2037,6 +2180,15 @@ function renderSettings(){
   document.getElementById('currencySelect').value=state.settings.currency;
   if(state.settings.monthlyIncome)document.getElementById('incomeInput').value=state.settings.monthlyIncome;
   document.getElementById('cycleStartInput').value=state.settings.cycleStartDay||1;
+
+  const ob = document.getElementById('openingBalInput');
+  const od = document.getElementById('openingDateInput');
+  const cn = document.getElementById('checkingNameInput');
+  if (ob && state.settings.openingBalance !== null && state.settings.openingBalance !== undefined)
+    ob.value = state.settings.openingBalance;
+  if (od) od.value = state.settings.openingDate || '';
+  if (cn) cn.value = state.settings.checkingName || '';
+  renderBankPreview();
   renderCatManageList();
   renderSyncSettings();
 }
@@ -2200,8 +2352,11 @@ async function syncToSheets() {
       ['currency',      state.settings.currency],
       ['theme',         state.settings.theme],
       ['monthlyIncome', state.settings.monthlyIncome],
-      ['cycleStartDay', state.settings.cycleStartDay || 1],
-      ['userName',      state.settings.userName || '']
+      ['cycleStartDay',  state.settings.cycleStartDay || 1],
+      ['userName',       state.settings.userName || ''],
+      ['checkingName',   state.settings.checkingName || ''],
+      ['openingBalance', state.settings.openingBalance ?? ''],
+      ['openingDate',    state.settings.openingDate || '']
     ]);
 
     // Avontuur: level, pad, stad, missie — als JSON zodat het compact blijft
@@ -2326,6 +2481,10 @@ async function syncFromSheets() {
         if (r[0]==='monthlyIncome') state.settings.monthlyIncome = parseFloat(r[1])||0;
         if (r[0]==='cycleStartDay') state.settings.cycleStartDay = parseInt(r[1])||1;
         if (r[0]==='userName')      state.settings.userName      = r[1]||'';
+        if (r[0]==='checkingName')  state.settings.checkingName  = r[1]||'';
+        if (r[0]==='openingDate')   state.settings.openingDate   = r[1]||'';
+        if (r[0]==='openingBalance')
+          state.settings.openingBalance = (r[1]==='' || r[1]==null) ? null : parseFloat(r[1]);
       });
     }
 
