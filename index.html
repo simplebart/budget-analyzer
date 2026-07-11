@@ -158,6 +158,9 @@
             <span id="boardDays">— dagen te gaan</span>
           </div>
 
+          <!-- Het dagbudget: wat kun je vandaag nog uitgeven? -->
+          <div class="today" id="today"></div>
+
           <div class="board-stats">
             <div class="board-stat">
               <span class="board-stat-lbl">Binnen</span>
@@ -189,7 +192,7 @@
 
       <!-- ═══ Waar het heen ging ═══ -->
       <section class="strip">
-        <h2 class="strip-title">Waar het heen ging</h2>
+        <h2 class="strip-title">Vergeleken met vorige cyclus</h2>
         <span class="strip-meta" id="catStripMeta"></span>
       </section>
 
@@ -551,6 +554,21 @@
             <div class="inline-input-row">
               <input type="text" class="filter-select" id="checkingNameInput" placeholder="144894971" style="width:150px" />
               <button class="btn-primary-sm" onclick="saveCheckingName()">Opslaan</button>
+            </div>
+          </div>
+
+          <div class="setting-row" style="border-bottom:none">
+            <div class="setting-info">
+              <div class="setting-name">Streefbedrag overhouden</div>
+              <div class="setting-desc">
+                Wil je aan het eind van elke cyclus iets overhouden? Dat bedrag
+                wordt gereserveerd en telt niet mee in je dagbudget — zo eet je
+                het niet per ongeluk op.
+              </div>
+            </div>
+            <div class="inline-input-row">
+              <input type="number" step="0.01" class="filter-select" id="keepTargetInput" placeholder="0,00" style="width:110px" />
+              <button class="btn-primary-sm" onclick="saveKeepTarget()">Opslaan</button>
             </div>
           </div>
 
