@@ -88,14 +88,32 @@ const PATH_STOPS = [
   { name: 'De Horizon',         icon: '🌅', desc: 'Er is altijd meer' },
 ];
 
+/* Hoeveel geslaagde missies kost het om deze halte te verlaten?
+   Hoe verder op het pad, hoe zwaarder elke halte weegt. */
+function stepsForStop(index) {
+  if (index < 5)  return 1;   // halte 1-5:   1 missie
+  if (index < 10) return 2;   // halte 6-10:  2 missies
+  if (index < 15) return 3;   // halte 11-15: 3 missies
+  return 4;                   // halte 16-20: 4 missies
+}
+
 function getPathInfo() {
-  const pos = Math.max(0, Math.min(state.adventure.pathPosition, PATH_STOPS.length - 1));
+  const a = state.adventure;
+  const pos = Math.max(0, Math.min(a.pathPosition, PATH_STOPS.length - 1));
+  const needed = stepsForStop(pos);
+  const done   = Math.max(0, Math.min(a.pathSteps || 0, needed));
+
   return {
     position: pos,
     current: PATH_STOPS[pos],
     next: pos < PATH_STOPS.length - 1 ? PATH_STOPS[pos + 1] : null,
     total: PATH_STOPS.length,
     stops: PATH_STOPS,
+    stepsDone: done,
+    stepsNeeded: needed,
+    stepsLeft: Math.max(0, needed - done),
+    stepProgress: needed > 0 ? Math.round((done / needed) * 100) : 100,
+    isFinalStop: pos >= PATH_STOPS.length - 1,
   };
 }
 
@@ -416,28 +434,50 @@ function evaluateMission(mission) {
   const tier = tpl.tier;
 
   let xpChange = 0;
-  let pathChange = 0;
+  if (a.pathSteps === undefined) a.pathSteps = 0;
+
+  const posBefore = a.pathPosition;
+  let advanced = false;   // halte bereikt?
+  let fellBack = false;   // halte verloren?
 
   if (result.success) {
-    xpChange = 100 * tier;                    // hogere tier = meer XP
-    pathChange = 1;                           // één halte vooruit
-    a.cityLevel += 1;                         // stad groeit — ALTIJD
+    xpChange = 100 * tier;
+    a.cityLevel += 1;                         // stad groeit — ALTIJD, krimpt nooit
     a.stats.missionsCompleted++;
     a.stats.streak++;
     a.stats.bestStreak = Math.max(a.stats.bestStreak, a.stats.streak);
-
-    // Streak bonus
     if (a.stats.streak >= 3) xpChange += 50 * Math.min(5, a.stats.streak - 2);
+
+    // Stap vooruit binnen de huidige halte
+    a.pathSteps++;
+    const needed = stepsForStop(a.pathPosition);
+    if (a.pathSteps >= needed && a.pathPosition < PATH_STOPS.length - 1) {
+      a.pathPosition++;
+      a.pathSteps = 0;    // reset voor de nieuwe halte
+      advanced = true;
+    } else if (a.pathPosition >= PATH_STOPS.length - 1) {
+      a.pathSteps = Math.min(a.pathSteps, stepsForStop(a.pathPosition)); // cap op laatste halte
+    }
   } else {
-    xpChange = -40 * tier;                    // verlies XP
-    pathChange = -1;                          // één halte terug
+    xpChange = -40 * tier;
     a.stats.missionsFailed++;
     a.stats.streak = 0;
-    // Stad blijft staan — geen krimp
+
+    // Eén stap terug binnen de halte; op 0 → val terug naar vorige halte
+    a.pathSteps--;
+    if (a.pathSteps < 0) {
+      if (a.pathPosition > 0) {
+        a.pathPosition--;
+        // Je begint op de vorige halte met bijna alle stappen nog gedaan (één eraf)
+        a.pathSteps = Math.max(0, stepsForStop(a.pathPosition) - 1);
+        fellBack = true;
+      } else {
+        a.pathSteps = 0;   // op het startpunt kun je niet verder terug
+      }
+    }
   }
 
   a.xp = Math.max(0, a.xp + xpChange);
-  a.pathPosition = Math.max(0, Math.min(PATH_STOPS.length - 1, a.pathPosition + pathChange));
 
   a.missionHistory.push({
     id: mission.id,
@@ -446,7 +486,8 @@ function evaluateMission(mission) {
     week: mission.weekStart,
     success: result.success,
     xpChange,
-    pathChange,
+    advanced,
+    fellBack,
     progress: result.progress,
   });
 
@@ -456,19 +497,40 @@ function evaluateMission(mission) {
   saveState(true);
 
   // Toon het resultaat
-  setTimeout(() => showMissionResult(tpl, result, xpChange, pathChange), 700);
+  setTimeout(() => showMissionResult(tpl, result, xpChange, { advanced, fellBack, posBefore }), 700);
 }
 
-function showMissionResult(tpl, result, xpChange, pathChange) {
+function showMissionResult(tpl, result, xpChange, pathInfo) {
   const success = result.success;
   const path = getPathInfo();
+  const { advanced, fellBack } = pathInfo;
+
+  // Beschrijf wat er met het pad gebeurde
+  let pathLine, pathColor, pathSub;
+  if (advanced) {
+    pathLine  = '🎏 Nieuwe halte bereikt!';
+    pathColor = 'var(--green)';
+    pathSub   = `${path.current.icon} ${path.current.name}`;
+  } else if (fellBack) {
+    pathLine  = '⬅️ Teruggevallen naar vorige halte';
+    pathColor = 'var(--red)';
+    pathSub   = `${path.current.icon} ${path.current.name}`;
+  } else if (success) {
+    pathLine  = `→ Stap ${path.stepsDone} van ${path.stepsNeeded}`;
+    pathColor = 'var(--green)';
+    pathSub   = `Nog ${path.stepsLeft} tot ${path.next ? path.next.name : 'het einde'}`;
+  } else {
+    pathLine  = `← Stap verloren`;
+    pathColor = 'var(--red)';
+    pathSub   = `${path.stepsDone} van ${path.stepsNeeded} op ${path.current.name}`;
+  }
 
   const overlay = document.createElement('div');
   overlay.className = 'adv-overlay';
   overlay.innerHTML = `
     <div class="adv-result-card ${success ? 'win' : 'lose'}">
       <div class="adv-result-glow"></div>
-      <div class="adv-result-icon">${success ? '🎉' : '💨'}</div>
+      <div class="adv-result-icon">${advanced ? '🎉' : success ? '✨' : '💨'}</div>
       <div class="adv-result-label">${success ? 'Missie volbracht' : 'Missie mislukt'}</div>
       <div class="adv-result-name">${tpl.icon} ${tpl.name}</div>
       <div class="adv-result-progress">${result.progress}</div>
@@ -479,12 +541,18 @@ function showMissionResult(tpl, result, xpChange, pathChange) {
             ${xpChange >= 0 ? '+' : ''}${xpChange} XP
           </span>
         </div>
+
         <div class="adv-reward">
-          <span class="adv-reward-val" style="color:${pathChange>=0?'var(--green)':'var(--red)'}">
-            ${pathChange > 0 ? '→ Vooruit' : '← Terug'}
-          </span>
-          <span class="adv-reward-lbl">${path.current.icon} ${path.current.name}</span>
+          <span class="adv-reward-val" style="color:${pathColor}">${pathLine}</span>
+          <span class="adv-reward-lbl">${pathSub}</span>
+          ${!advanced && !fellBack ? `
+          <div class="adv-step-track">
+            ${Array.from({length: path.stepsNeeded}, (_, i) =>
+              `<span class="adv-step-dot ${i < path.stepsDone ? 'filled' : ''}"></span>`
+            ).join('')}
+          </div>` : ''}
         </div>
+
         ${success ? `
         <div class="adv-reward">
           <span class="adv-reward-val" style="color:var(--accent)">🏗️ Stad groeit</span>
@@ -677,11 +745,32 @@ function renderAdventure() {
   const pathEl = document.getElementById('advPath');
   if (pathEl) {
     pathEl.innerHTML = `
+      <!-- Voortgang binnen de huidige halte -->
+      <div class="adv-step-banner">
+        <div class="adv-step-banner-top">
+          <span class="adv-step-banner-label">Voortgang op ${path.current.name}</span>
+          <span class="adv-step-banner-count">${path.stepsDone} / ${path.stepsNeeded}</span>
+        </div>
+        <div class="adv-step-track big">
+          ${Array.from({length: path.stepsNeeded}, (_, i) =>
+            `<span class="adv-step-dot ${i < path.stepsDone ? 'filled' : ''}"></span>`
+          ).join('')}
+        </div>
+        <div class="adv-step-banner-sub">
+          ${path.isFinalStop
+            ? 'Je hebt de laatste halte bereikt — blijf bouwen aan je stad.'
+            : path.stepsLeft === 0
+              ? 'Volgende missie brengt je naar de volgende halte!'
+              : `Nog <strong>${path.stepsLeft}</strong> ${path.stepsLeft===1?'geslaagde missie':'geslaagde missies'} tot <strong>${path.next.name}</strong> ${path.next.icon}`}
+        </div>
+      </div>
+
       <div class="adv-path">
         ${path.stops.map((s, i) => {
           const isPast    = i < path.position;
           const isCurrent = i === path.position;
           const cls = isCurrent ? 'current' : isPast ? 'past' : 'future';
+          const cost = stepsForStop(i);
           return `
             <div class="adv-path-stop ${cls}">
               <div class="adv-path-marker">
@@ -689,14 +778,15 @@ function renderAdventure() {
               </div>
               <div class="adv-path-info">
                 <div class="adv-path-name">${s.name}</div>
-                ${isCurrent ? `<div class="adv-path-desc">${s.desc}</div>` : ''}
+                ${isCurrent
+                  ? `<div class="adv-path-desc">${s.desc}</div>`
+                  : `<div class="adv-path-cost">${cost} ${cost===1?'missie':'missies'}</div>`}
               </div>
               ${isCurrent ? '<span class="adv-path-you">jij</span>' : ''}
             </div>`;
         }).join('')}
       </div>`;
 
-    // Scroll naar huidige positie
     setTimeout(() => {
       const cur = pathEl.querySelector('.adv-path-stop.current');
       if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -762,6 +852,8 @@ function renderDashMission() {
   const daysLeft = Math.max(0, Math.ceil((new Date(a.currentMission.weekEnd + 'T23:59:59') - new Date()) / 86400000));
   const lvl = getLevelInfo();
 
+  const path = getPathInfo();
+
   el.innerHTML = `
     <div class="dash-mis-head">
       <span class="dash-mis-icon">${tpl.icon}</span>
@@ -773,7 +865,14 @@ function renderDashMission() {
     </div>
     <div class="dash-mis-foot">
       <span class="dash-mis-status ${res.success ? 'good' : 'bad'}">${res.success ? '✓' : '○'} ${res.progress}</span>
-      <span class="dash-mis-lvl">${lvl.icon} Lv.${lvl.level}</span>
+      <span class="dash-mis-path">
+        <span class="adv-step-track mini">
+          ${Array.from({length: path.stepsNeeded}, (_, i) =>
+            `<span class="adv-step-dot ${i < path.stepsDone ? 'filled' : ''}"></span>`
+          ).join('')}
+        </span>
+        <span class="dash-mis-lvl">${lvl.icon} Lv.${lvl.level}</span>
+      </span>
     </div>`;
   card.style.display = '';
 }
