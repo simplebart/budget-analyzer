@@ -3001,3 +3001,196 @@ body.app-locked .pin-screen { visibility: visible; }
   .strip-title { font-size: 15px; }
   .strip::after { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   HET PERSONAGEPANEEL — de zijbalk is wie je bent,
+   geen menu maar een karakterblad.
+   ═══════════════════════════════════════════════════════════ */
+.player {
+  padding: 18px 16px 16px;
+  border-bottom: 1px solid var(--edge);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--gold) 11%, var(--ink-2)),
+    var(--ink-2) 62%);
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.player:hover { background: linear-gradient(160deg,
+    color-mix(in srgb, var(--gold) 16%, var(--ink-2)), var(--ink-2) 62%); }
+
+.player-top {
+  display: flex; align-items: center; gap: 11px;
+  margin-bottom: 14px;
+}
+
+/* Het wapen: je rang in één fiche */
+.player-crest {
+  width: 42px; height: 42px; flex-shrink: 0;
+  display: grid; place-items: center;
+  font-size: 21px;
+  border-radius: 12px;
+  background: var(--gold-dim);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--gold) 20%, transparent);
+}
+
+.player-id { min-width: 0; }
+
+.player-title {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--chalk);
+  line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.player-lvl {
+  font-size: 11px; font-weight: 700;
+  color: var(--gold);
+}
+
+.player-xp { margin-bottom: 13px; }
+
+.player-xp-rail {
+  height: 7px;
+  padding: 1px;
+  border-radius: 4px;
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  margin-bottom: 5px;
+}
+.player-xp-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 60%, var(--ember)), var(--gold));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 50%, transparent);
+  transition: width var(--t-slow);
+}
+.player-xp-num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px; font-weight: 700;
+  color: var(--chalk-3);
+}
+
+/* Waar je staat op het pad */
+.player-quest {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  border: 1px solid var(--edge);
+}
+.player-quest-icon { font-size: 14px; line-height: 1; }
+.player-quest-name {
+  flex: 1; min-width: 0;
+  font-size: 11px; font-weight: 700;
+  color: var(--chalk-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.player-pips { display: flex; gap: 2px; flex-shrink: 0; }
+.player-pips .hud-pip { width: 9px; height: 3px; }
+
+/* Het seizoen: de cyclus waarin je speelt */
+.season {
+  padding: 13px 16px 15px;
+  border-top: 1px solid var(--edge);
+  background: var(--ink);
+}
+.season-lbl {
+  display: block;
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--chalk-3);
+  margin-bottom: 3px;
+}
+.season-val {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 700;
+  color: var(--chalk);
+}
+
+/* De HUD-strip is op desktop overbodig — de zijbalk draagt hem nu */
+@media (min-width: 621px) {
+  .hud-mobile-only { display: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DE METERTAAL — één balk door de hele app
+   Elke voortgang is een energiebalk met cellen. Budgetten,
+   doelen, spaarpotten, categorieën: dezelfde taal, zodat het
+   één spel is en geen dashboard met een spel ernaast.
+   ═══════════════════════════════════════════════════════════ */
+.budget-bar-track,
+.goal-bar-track,
+.cat-breakdown-bar-wrap {
+  position: relative;
+  height: 12px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  overflow: hidden;
+}
+
+/* Het rooster ligt op de baan, dus de cellen houden hun breedte */
+.budget-bar-track::after,
+.goal-bar-track::after,
+.cat-breakdown-bar-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg,
+    transparent 0 calc(100% / 16 - 3px),
+    var(--ink)  calc(100% / 16 - 3px) calc(100% / 16));
+}
+
+.budget-bar-fill,
+.goal-bar-fill,
+.cat-breakdown-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width var(--t-slow), background var(--t);
+}
+
+/* De categoriebalkjes zijn fijner — minder cellen */
+.cat-breakdown-bar-wrap { height: 10px; }
+.cat-breakdown-bar-wrap::after {
+  background: repeating-linear-gradient(90deg,
+    transparent 0 calc(100% / 12 - 3px),
+    var(--ink)  calc(100% / 12 - 3px) calc(100% / 12));
+}
+
+/* ─── Budgetten: een grens die je niet mag breken ─── */
+.budget-card {
+  border-left: 3px solid var(--edge-hi);
+  transition: border-color var(--t), transform var(--t-fast), box-shadow var(--t-fast);
+}
+.budget-card.safe  { border-left-color: var(--jade); }
+.budget-card.close { border-left-color: var(--gold); }
+.budget-card.over  { border-left-color: var(--ember); }
+
+.budget-pct-badge {
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+/* ─── Doelen: een queeste met een bestemming ─── */
+.goal-card { border-left: 3px solid var(--lilac); }
+.goal-card.done { border-left-color: var(--jade); }
+
+/* ═══════════════════════════════════════════════════════════
+   PAGINAKOPPEN — elke plek krijgt een naam in de taal
+   van het spel, zodat je weet waar je bent.
+   ═══════════════════════════════════════════════════════════ */
+.page-eyebrow {
+  display: block;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.14em;
+  color: var(--lilac);
+  margin-bottom: 5px;
+}
