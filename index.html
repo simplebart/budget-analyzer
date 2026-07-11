@@ -194,15 +194,16 @@
         <div class="card">
           <div id="dashCatList" class="cat-breakdown-list"></div>
         </div>
-        <div class="card chart-card">
-          <div class="chart-wrap" style="height:230px">
+        <div class="card donut-card">
+          <div class="donut-wrap">
             <canvas id="categoryChart"></canvas>
+            <div class="donut-center">
+              <div class="donut-total" id="donutTotal">€0</div>
+              <div class="donut-lbl">deze cyclus</div>
+            </div>
           </div>
-          <div class="donut-center" style="display:none">
-            <div class="donut-total" id="donutTotal">€0</div>
-            <div class="donut-lbl">totaal</div>
-          </div>
-          <div class="donut-legend" id="donutLegend" style="display:none"></div>
+          <!-- De lijst links is de legenda; deze blijft leeg -->
+          <div class="donut-legend" id="donutLegend" hidden></div>
         </div>
       </div>
 
