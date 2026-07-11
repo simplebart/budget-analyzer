@@ -1246,6 +1246,33 @@ function transferDirection(t) {
   return 'none';                                        // raakt de rekening niet
 }
 
+
+/* Wat stond er op je rekening aan het EIND van deze datum?
+   Hiermee kunnen we de cycli aan elkaar knopen: het slotsaldo van
+   de ene cyclus is het startsaldo van de volgende. */
+function bankBalanceAt(dateStr) {
+  if (!hasBankSetup()) return null;
+
+  const s = state.settings;
+  if (dateStr < s.openingDate) return null;   // vóór je ijkpunt weten we niets
+
+  let saldo = Number(s.openingBalance) || 0;
+
+  state.transactions
+    .filter(t => t.date >= s.openingDate && t.date <= dateStr)
+    .forEach(t => {
+      if (t.type === 'income')  saldo += t.amt;
+      if (t.type === 'expense') saldo -= t.amt;
+      if (t.type === 'transfer') {
+        const dir = transferDirection(t);
+        if (dir === 'out') saldo -= t.amt;
+        if (dir === 'in')  saldo += t.amt;
+      }
+    });
+
+  return Math.round(saldo * 100) / 100;
+}
+
 function computeBankBalance() {
   if (!hasBankSetup()) return null;
 
@@ -1583,6 +1610,9 @@ function renderDashboard(){
     if (savedLbl) savedLbl.textContent = 'Gespaard';
   }
 
+  /* ── De brug tussen de cycli ── */
+  renderCarry();
+
   /* ── De volgende zet: de missie ── */
   renderBoardQuest();
 
@@ -1620,6 +1650,55 @@ function renderDashboard(){
 }
 
 /* De missie als "volgende zet" op het speelbord */
+
+/* De brug tussen de cycli: waar je mee begon, en waar je op afstevent.
+   Dit is het antwoord op "wat loopt er door van de ene cyclus naar de
+   andere" — het slotsaldo van de vorige is je startkapitaal nu. */
+function renderCarry() {
+  const el = document.getElementById('carry');
+  if (!el) return;
+
+  if (!hasBankSetup()) { el.innerHTML = ''; return; }
+
+  const { start } = getCurrentCycleRange();
+  const startStr = dateToStr(start);
+
+  // Het saldo op de dag vóór deze cyclus begon
+  const dagErvoor = new Date(start);
+  dagErvoor.setDate(dagErvoor.getDate() - 1);
+
+  let meegenomen = bankBalanceAt(dateToStr(dagErvoor));
+
+  /* Valt je ijkpunt precies op (of na) het begin van deze cyclus, dan
+     bestaat "de dag ervoor" nog niet in de boekhouding. Je beginsaldo
+     ís dan wat je meenam. */
+  if (meegenomen === null && state.settings.openingDate >= startStr) {
+    meegenomen = Number(state.settings.openingBalance);
+  }
+
+  const nu = computeBankBalance();
+  if (meegenomen === null || nu === null || isNaN(meegenomen)) { el.innerHTML = ''; return; }
+
+  const verschil = nu - meegenomen;
+  const groeit   = verschil >= 0;
+
+  el.innerHTML = `
+    <span class="carry-item">
+      <span class="carry-lbl">Meegenomen</span>
+      <span class="carry-val">${meegenomen < 0 ? '−' : ''}${fmt(Math.abs(meegenomen))}</span>
+    </span>
+
+    <span class="carry-arrow ${groeit ? 'up' : 'down'}">
+      ${groeit ? '↗' : '↘'}
+      <span class="carry-delta">${groeit ? '+' : '−'}${fmt(Math.abs(verschil))}</span>
+    </span>
+
+    <span class="carry-item">
+      <span class="carry-lbl">Nu</span>
+      <span class="carry-val">${nu < 0 ? '−' : ''}${fmt(Math.abs(nu))}</span>
+    </span>`;
+}
+
 function renderBoardQuest() {
   const el = document.getElementById('boardQuestInner');
   if (!el) return;
@@ -1704,17 +1783,83 @@ function chartColors(){
 const PALETTE = ['#8B7FF7','#2FCB8B','#FF6A4D','#E9A83C','#5FD3E8','#E87BC7','#7BE0B0','#FFA36B'];
 
 function renderCashflowChart(){
-  const{grid,text}=chartColors();
-  const cycles = getLastNCycles(6); // 6 budgetcycli i.p.v. kalendermaanden — volgt de instelling onder Instellingen
-  const months = cycles.map(c => c.label);
-  const incD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='income'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const expD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='expense'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
-  const traD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='transfer'&&c.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const { grid, text } = chartColors();
+  const cycles = getLastNCycles(6);
 
-  const ctx=document.getElementById('cashflowChart').getContext('2d');
-  if(charts.cashflow)charts.cashflow.destroy();
-  charts.cashflow=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{label:'Inkomsten',data:incD,backgroundColor:'rgba(47,203,139,0.78)',borderRadius:4,borderSkipped:false},{label:'Uitgaven',data:expD,backgroundColor:'rgba(255,106,77,0.78)',borderRadius:4,borderSkipped:false},{label:'Transfers',data:traD,backgroundColor:'rgba(139,127,247,0.70)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>cycles[items[0].dataIndex].fullLabel,label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('cashflowLegend').innerHTML=[{label:'Inkomsten',color:'#2FCB8B'},{label:'Uitgaven',color:'#FF6A4D'},{label:'Transfers',color:'#8B7FF7'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+  const months = cycles.map(c => c.label);
+  const incD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='income'  && c.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const expD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='expense' && c.match(t)).reduce((a,t)=>a+t.amt,0)));
+  const traD = cycles.map(c => Math.round(state.transactions.filter(t=>t.type==='transfer'&& c.match(t)).reduce((a,t)=>a+t.amt,0)));
+
+  /* De saldolijn: wat er aan het EIND van elke cyclus op je rekening stond.
+     Dit is wat de cycli met elkaar verbindt — het slot van de één is de
+     start van de volgende. Zonder beginsaldo kunnen we dit niet weten. */
+  const saldoLijn = cycles.map(c => {
+    const eind = dateToStr(c.end) > today() ? today() : dateToStr(c.end);
+    return bankBalanceAt(eind);
+  });
+  const toonSaldo = hasBankSetup() && saldoLijn.some(v => v !== null);
+
+  const datasets = [
+    { type:'bar', label:'Binnen',   data:incD, backgroundColor:'rgba(47,203,139,0.78)',  borderRadius:5, borderSkipped:false, order:2 },
+    { type:'bar', label:'Eruit',    data:expD, backgroundColor:'rgba(255,106,77,0.78)',  borderRadius:5, borderSkipped:false, order:2 },
+    { type:'bar', label:'Weggezet', data:traD, backgroundColor:'rgba(139,127,247,0.70)', borderRadius:5, borderSkipped:false, order:2 },
+  ];
+
+  if (toonSaldo) {
+    datasets.unshift({
+      type:'line',
+      label:'Op je rekening',
+      data: saldoLijn,
+      borderColor:'#E9A83C',
+      backgroundColor:'rgba(233,168,60,0.10)',
+      borderWidth:2.5,
+      tension:0.35,
+      fill:true,
+      pointRadius:4,
+      pointBackgroundColor:'#E9A83C',
+      pointBorderColor: state.settings.theme==='light' ? '#fff' : '#16122E',
+      pointBorderWidth:2,
+      spanGaps:true,
+      order:1,
+    });
+  }
+
+  const ctx = document.getElementById('cashflowChart').getContext('2d');
+  if (charts.cashflow) charts.cashflow.destroy();
+
+  charts.cashflow = new Chart(ctx, {
+    data: { labels: months, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          callbacks:{
+            title: items => cycles[items[0].dataIndex].fullLabel,
+            label: c => ' ' + c.dataset.label + ': ' + state.settings.currency +
+                        c.raw.toLocaleString('nl-NL'),
+          }
+        }
+      },
+      scales:{
+        x:{ grid:{ display:false }, ticks:{ color:text, font:{ size:11 } } },
+        y:{ grid:{ color:grid }, ticks:{ color:text, font:{ size:11 },
+            callback:v => state.settings.currency + v.toLocaleString('nl-NL') } }
+      }
+    }
+  });
+
+  const leg = [
+    ...(toonSaldo ? [{ label:'Op je rekening', color:'#E9A83C' }] : []),
+    { label:'Binnen',   color:'#2FCB8B' },
+    { label:'Eruit',    color:'#FF6A4D' },
+    { label:'Weggezet', color:'#8B7FF7' },
+  ];
+  document.getElementById('cashflowLegend').innerHTML = leg.map(l =>
+    `<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`
+  ).join('');
 }
 
 function renderDonutChart(cats){
