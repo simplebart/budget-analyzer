@@ -24,7 +24,7 @@ let state = {
     { name:'Overig',         emoji:'📦', color:'#8B84AC', deletable:false },
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1,
-              checkingName:'', openingBalance:null, openingDate:'' },
+              checkingName:'', openingBalance:null, openingDate:'', keepTarget:0 },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
   adventure: {
     xp: 0,                    // totale ervaring, bepaalt level 1-100
@@ -1141,6 +1141,17 @@ function saveOpeningBalance() {
   showToast('Beginsaldo opgeslagen. Je saldo wordt nu doorgerekend.', 'success');
 }
 
+function saveKeepTarget() {
+  const v = parseFloat(document.getElementById('keepTargetInput').value);
+  state.settings.keepTarget = isNaN(v) || v < 0 ? 0 : v;
+  saveState();
+  renderSettings();
+  renderDashboard();
+  showToast(state.settings.keepTarget > 0
+    ? `${fmt(state.settings.keepTarget)} gereserveerd — telt niet mee in je dagbudget.`
+    : 'Streefbedrag gewist.', 'success');
+}
+
 function saveCheckingName() {
   state.settings.checkingName = document.getElementById('checkingNameInput').value.trim();
   saveState();
@@ -1303,6 +1314,71 @@ function getCurrentMonthTx() {
   const startStr = dateToStr(start);
   const endStr = dateToStr(end);
   return state.transactions.filter(t => t.date >= startStr && t.date <= endStr);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HET DAGBUDGET — wat kun je vandaag uitgeven?
+
+   Zelfcorrigerend: het rekent elke dag opnieuw met wat er nog is
+   en hoeveel dagen er nog komen. Blijf je vandaag onder je bedrag,
+   dan is er morgen méér over voor minder dagen — dus je dagbudget
+   stijgt. Geef je te veel uit, dan krimpt het. Zo stuurt het zichzelf.
+
+   Vaste lasten die nog moeten komen worden eerst gereserveerd, want
+   die kun je niet opeten. En wil je aan het eind iets overhouden,
+   dan wordt dat er ook afgehaald.
+   ═══════════════════════════════════════════════════════════ */
+function computeDailyAllowance() {
+  const { start, end } = getCurrentCycleRange();
+  const totalDays = getCycleTotalDays();
+  const dayNow    = Math.max(1, Math.min(totalDays, getCycleDayProgress()));
+  const daysLeft  = Math.max(1, totalDays - dayNow + 1);   // vandaag telt mee
+
+  const todayStr0 = today();
+
+  /* Wat je VANDAAG mag uitgeven, moet je berekenen vanaf wat je bij het
+     BEGIN van vandaag had — niet vanaf je saldo van dit moment. Anders
+     krimpt je dagbudget terwijl je de dag doorkomt, en telt wat je al
+     uitgaf dubbel mee. Dus: huidig saldo + wat je vandaag al uitgaf. */
+  const spentTodayNow = state.transactions
+    .filter(t => t.type === 'expense' && t.date === todayStr0)
+    .reduce((a, t) => a + t.amt, 0);
+
+  const bank = computeBankBalance();
+  const { income, expense } = computeMetrics();
+  const nu  = bank !== null ? bank : (income - expense);
+  const pot = nu + spentTodayNow;      // saldo zoals het vanochtend was
+
+  // Vaste lasten die deze cyclus nog moeten komen — die zijn al vergeven
+  const todayStr = todayStr0;
+  let upcoming = 0;
+  (state.recurring || []).filter(r => r.type === 'expense').forEach(r => {
+    let d = new Date(start.getFullYear(), start.getMonth(), Math.min(r.day, 28));
+    if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(r.day, 28));
+    if (d > end) return;
+    const ds = dateToStr(d);
+    if (ds <= todayStr) return;                       // al geweest
+    const alDeze = getCurrentMonthTx().some(t =>
+      t.type === 'expense' && t.desc === r.desc && Math.abs(t.amt - r.amt) < 0.01);
+    if (!alDeze) upcoming += r.amt;
+  });
+
+  const keep      = Number(state.settings.keepTarget) || 0;
+  const vrij      = pot - upcoming - keep;
+  const perDag    = vrij / daysLeft;
+
+  const spentToday = spentTodayNow;
+
+  return {
+    perDag:      Math.round(perDag * 100) / 100,
+    restVandaag: Math.round((perDag - spentToday) * 100) / 100,
+    spentToday:  Math.round(spentToday * 100) / 100,
+    daysLeft,
+    upcoming:    Math.round(upcoming * 100) / 100,
+    keep,
+    pot:         Math.round(pot * 100) / 100,
+  };
 }
 
 function computeMetrics() {
@@ -1653,6 +1729,9 @@ function renderDashboard(){
     if (savedLbl) savedLbl.textContent = 'Gespaard';
   }
 
+  /* ── Het dagbudget ── */
+  renderToday();
+
   /* ── De brug tussen de cycli ── */
   renderCarry();
 
@@ -1690,6 +1769,46 @@ function renderDashboard(){
 
   const txSub = document.getElementById('txPageSub');
   if (txSub) txSub.textContent = state.transactions.length + ' transacties in totaal';
+}
+
+
+/* Het dagbudget op het speelbord */
+function renderToday() {
+  const el = document.getElementById('today');
+  if (!el) return;
+
+  const a = computeDailyAllowance();
+
+  // Zonder inkomsten valt er niets te verdelen
+  if (a.pot <= 0 && a.spentToday === 0) { el.innerHTML = ''; return; }
+
+  const over   = a.restVandaag;
+  const opraak = over <= 0;
+  const pct    = a.perDag > 0
+    ? Math.max(0, Math.min(100, (a.spentToday / a.perDag) * 100))
+    : 100;
+
+  const kleur = opraak ? 'var(--ember)'
+              : pct > 70 ? 'var(--gold)'
+              : 'var(--jade)';
+
+  el.innerHTML = `
+    <div class="today-top">
+      <span class="today-lbl">Vandaag te besteden</span>
+      <span class="today-amt" style="color:${kleur}">
+        ${opraak ? '−' : ''}${fmt(Math.abs(over))}
+      </span>
+    </div>
+
+    <div class="today-rail">
+      <div class="today-fill" style="width:${pct}%;background:${kleur}"></div>
+    </div>
+
+    <div class="today-meta">
+      <span>${a.spentToday > 0 ? fmt(a.spentToday) + ' al uit' : 'nog niks uitgegeven'}
+            · dagbudget ${fmt(a.perDag)}</span>
+      <span>${a.upcoming > 0 ? fmt(a.upcoming) + ' vaste lasten gereserveerd' : ''}</span>
+    </div>`;
 }
 
 /* De missie als "volgende zet" op het speelbord */
@@ -1781,32 +1900,82 @@ function renderBoardQuest() {
     </div>`;
 }
 
-/* Categorieën op het dashboard — compact, gesorteerd, met balkjes */
+/* ── VERGELEKEN MET VORIGE CYCLUS ──
+   Een lijst met alleen bedragen zegt weinig — je weet niet of €531
+   aan Wonen veel of weinig is. Naast de vorige cyclus gezet zegt het
+   alles: is het gestegen, gedaald, of gelijk gebleven?
+   Gesorteerd op de grootste verandering, want daar zit het nieuws. */
 function renderDashCategories(cats, total) {
   const el   = document.getElementById('dashCatList');
   const meta = document.getElementById('catStripMeta');
   if (!el) return;
 
-  const sorted = Object.entries(cats).sort((a,b) => b[1] - a[1]);
-  if (meta) meta.textContent = total > 0 ? fmt(total) + ' deze cyclus' : '';
+  const cycles = getLastNCycles(2);
+  const prev   = cycles[0];
 
-  if (!sorted.length) {
-    el.innerHTML = '<div class="empty-state">Nog geen uitgaven deze cyclus.</div>';
+  const prevCats = {};
+  state.transactions
+    .filter(t => t.type === 'expense' && prev.match(t))
+    .forEach(t => { prevCats[t.cat] = (prevCats[t.cat] || 0) + t.amt; });
+
+  const prevTotal = Object.values(prevCats).reduce((a, v) => a + v, 0);
+
+  // Alles wat in één van beide cycli voorkomt
+  const alle = [...new Set([...Object.keys(cats), ...Object.keys(prevCats)])];
+
+  const rijen = alle.map(cat => {
+    const nu  = cats[cat]     || 0;
+    const was = prevCats[cat] || 0;
+    return { cat, nu, was, diff: nu - was, nieuw: was === 0 && nu > 0, weg: nu === 0 && was > 0 };
+  }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));   // grootste verandering eerst
+
+  if (meta) {
+    if (prevTotal > 0) {
+      const d = total - prevTotal;
+      const teken = d >= 0 ? '+' : '−';
+      meta.textContent = `${fmt(total)} nu · ${fmt(prevTotal)} toen · ${teken}${fmt(Math.abs(d))}`;
+    } else {
+      meta.textContent = total > 0 ? `${fmt(total)} deze cyclus` : '';
+    }
+  }
+
+  if (!rijen.length) {
+    el.innerHTML = '<div class="empty-state">Nog geen uitgaven om te vergelijken.</div>';
     renderDonutChart(cats);
     return;
   }
 
-  el.innerHTML = sorted.map(([cat, amt]) => {
-    const pct = total > 0 ? Math.round((amt / total) * 100) : 0;
-    const col = catColor(cat);
-    return `<div class="cat-breakdown-row">
-      <span class="cat-breakdown-dot" style="background:${col}"></span>
-      <span class="cat-breakdown-name">${catEmoji(cat)} ${cat}</span>
-      <div class="cat-breakdown-bar-wrap">
-        <div class="cat-breakdown-bar" style="width:${pct}%;background:${col}"></div>
-      </div>
-      <span class="cat-breakdown-amt">${fmt(amt)}</span>
-      <span class="cat-breakdown-pct">${pct}%</span>
+  el.innerHTML = rijen.map(r => {
+    const col = catColor(r.cat);
+
+    // Hoe leest de verandering?
+    let deltaTxt, deltaCls;
+    if (r.nieuw)       { deltaTxt = 'nieuw';  deltaCls = 'new';  }
+    else if (r.weg)    { deltaTxt = 'weg';    deltaCls = 'gone'; }
+    else if (Math.abs(r.diff) < 0.5) { deltaTxt = 'gelijk'; deltaCls = 'same'; }
+    else {
+      const pct = r.was > 0 ? Math.round((r.diff / r.was) * 100) : null;
+      const up  = r.diff > 0;
+      deltaTxt  = `${up ? '↑' : '↓'} ${fmt(Math.abs(r.diff))}${pct !== null ? ` · ${Math.abs(pct)}%` : ''}`;
+      deltaCls  = up ? 'up' : 'down';
+    }
+
+    // Twee balken onder elkaar: toen en nu, op dezelfde schaal
+    const schaal = Math.max(r.nu, r.was, 1);
+    const pctNu  = (r.nu  / schaal) * 100;
+    const pctWas = (r.was / schaal) * 100;
+
+    return `<div class="cmp-row">
+      <span class="cmp-dot" style="background:${col}"></span>
+      <span class="cmp-name">${catEmoji(r.cat)} ${r.cat}</span>
+
+      <span class="cmp-bars">
+        <span class="cmp-bar was" style="width:${pctWas}%"></span>
+        <span class="cmp-bar nu"  style="width:${pctNu}%;background:${col}"></span>
+      </span>
+
+      <span class="cmp-amt">${fmt(r.nu)}</span>
+      <span class="cmp-delta ${deltaCls}">${deltaTxt}</span>
     </div>`;
   }).join('');
 
@@ -2296,6 +2465,8 @@ function renderSettings(){
     ob.value = state.settings.openingBalance;
   if (od) od.value = state.settings.openingDate || '';
   if (cn) cn.value = state.settings.checkingName || '';
+  const kt = document.getElementById('keepTargetInput');
+  if (kt) kt.value = state.settings.keepTarget || '';
   renderBankPreview();
   renderCatManageList();
   renderSyncSettings();
@@ -2464,7 +2635,8 @@ async function syncToSheets() {
       ['userName',       state.settings.userName || ''],
       ['checkingName',   state.settings.checkingName || ''],
       ['openingBalance', state.settings.openingBalance ?? ''],
-      ['openingDate',    state.settings.openingDate || '']
+      ['openingDate',    state.settings.openingDate || ''],
+      ['keepTarget',     state.settings.keepTarget || 0]
     ]);
 
     // Avontuur: level, pad, stad, missie — als JSON zodat het compact blijft
@@ -2591,6 +2763,7 @@ async function syncFromSheets() {
         if (r[0]==='userName')      state.settings.userName      = r[1]||'';
         if (r[0]==='checkingName')  state.settings.checkingName  = r[1]||'';
         if (r[0]==='openingDate')   state.settings.openingDate   = r[1]||'';
+        if (r[0]==='keepTarget')    state.settings.keepTarget    = parseFloat(r[1])||0;
         if (r[0]==='openingBalance')
           state.settings.openingBalance = (r[1]==='' || r[1]==null) ? null : parseFloat(r[1]);
       });
