@@ -134,7 +134,7 @@ function getCityInfo() {
 /* Elke missie: check(mission) → { success: bool, progress: string } */
 const MISSIONS = [
 
-  /* ── TIER 1: level 1-9 — makkelijk, gewenning ── */
+  /* ── TIER 1: level 1-9 — gewenning, licht ── */
   { id: 'log_3', tier: 1, icon: '📝', name: 'Houd bij',
     build: () => ({ target: 3 }),
     describe: m => `Log minstens ${m.target} transacties deze week`,
@@ -143,35 +143,25 @@ const MISSIONS = [
       return { success: n >= m.target, progress: `${n} van ${m.target} gelogd` };
     }},
 
-  { id: 'no_small_3', tier: 1, icon: '☕', name: 'Minder impulsjes',
-    build: () => ({ target: 3 }),
-    describe: m => `Maximaal ${m.target} uitgaven onder €15 deze week`,
+  { id: 'no_small_2', tier: 1, icon: '☕', name: 'Geen impulsjes',
+    build: () => ({ target: 0 }),
+    describe: () => `Géén uitgave onder €15 deze week`,
     check: m => {
       const n = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense'&&t.amt<15).length;
-      return { success: n <= m.target, progress: `${n} kleine uitgaven (max ${m.target})` };
+      return { success: n === 0, progress: n === 0 ? 'Nog vlekkeloos' : `${n} kleine uitgaven` };
+    }},
+
+  { id: 'spend_free_1', tier: 1, icon: '🚫', name: 'Eén stille dag',
+    build: () => ({ target: 1 }),
+    describe: m => `${m.target} dag zonder enige uitgave deze week`,
+    check: m => {
+      const days = daysInRange(m.weekStart, m.weekEnd);
+      const free = days.filter(d => !state.transactions.some(t=>t.type==='expense'&&t.date===d)).length;
+      return { success: free >= m.target, progress: `${free} van ${m.target} nuldagen` };
     }},
 
   /* ── TIER 2: level 10-24 — beginnen te sturen ── */
-  { id: 'no_small_1', tier: 2, icon: '☕', name: 'Strakke hand',
-    build: () => ({ target: 1 }),
-    describe: m => `Maximaal ${m.target} uitgave onder €15 deze week`,
-    check: m => {
-      const n = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense'&&t.amt<15).length;
-      return { success: n <= m.target, progress: `${n} kleine uitgaven (max ${m.target})` };
-    }},
-
-  { id: 'weekly_cap', tier: 2, icon: '🎯', name: 'Weekplafond',
-    build: () => {
-      const avg = avgWeeklySpend();
-      return { target: Math.round(avg * 0.9) }; // 10% onder gemiddelde
-    },
-    describe: m => `Blijf deze week onder ${fmt(m.target)} aan uitgaven`,
-    check: m => {
-      const spent = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-      return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
-    }},
-
-  { id: 'spend_free_2', tier: 2, icon: '🚫', name: 'Nuldagen',
+  { id: 'spend_free_2', tier: 2, icon: '🚫', name: 'Twee stille dagen',
     build: () => ({ target: 2 }),
     describe: m => `${m.target} dagen zonder enige uitgave deze week`,
     check: m => {
@@ -180,20 +170,39 @@ const MISSIONS = [
       return { success: free >= m.target, progress: `${free} van ${m.target} nuldagen` };
     }},
 
+  { id: 'weekly_cap_10', tier: 2, icon: '🎯', name: 'Weekplafond',
+    build: () => {
+      const avg = avgWeeklySpend();
+      return { target: Math.round(avg * 0.9) };
+    },
+    describe: m => `Blijf deze week onder ${fmt(m.target)} — 10% onder je gemiddelde`,
+    check: m => {
+      const spent = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+      return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
+    }},
+
+  { id: 'max_tx_5', tier: 2, icon: '🔢', name: 'Weinig transacties',
+    build: () => ({ target: 5 }),
+    describe: m => `Maximaal ${m.target} uitgaven deze week`,
+    check: m => {
+      const n = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense').length;
+      return { success: n <= m.target, progress: `${n} van max ${m.target} uitgaven` };
+    }},
+
   /* ── TIER 3: level 25-44 — categorie-discipline ── */
-  { id: 'cat_cap', tier: 3, icon: '🍽️', name: 'Categorie-limiet',
+  { id: 'cat_cap_25', tier: 3, icon: '🍽️', name: 'Categorie-limiet',
     build: () => {
       const cat = topSpendCategory();
       const avg = avgWeeklySpendInCat(cat);
-      return { cat, target: Math.round(Math.max(10, avg * 0.75)) }; // 25% minder
+      return { cat, target: Math.round(Math.max(10, avg * 0.75)) };
     },
-    describe: m => `Houd ${m.cat} onder ${fmt(m.target)} deze week`,
+    describe: m => `Houd ${m.cat} onder ${fmt(m.target)} deze week — 25% minder`,
     check: m => {
       const spent = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense'&&t.cat===m.cat).reduce((a,t)=>a+t.amt,0);
       return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
     }},
 
-  { id: 'spend_free_3', tier: 3, icon: '🚫', name: 'Drie stille dagen',
+  { id: 'spend_free_3', tier: 3, icon: '🧘', name: 'Drie stille dagen',
     build: () => ({ target: 3 }),
     describe: m => `${m.target} dagen zonder enige uitgave deze week`,
     check: m => {
@@ -213,16 +222,8 @@ const MISSIONS = [
       return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
     }},
 
-  /* ── TIER 4: level 45-69 — zwaardere combinaties ── */
-  { id: 'no_small_0', tier: 4, icon: '💎', name: 'Geen enkel lek',
-    build: () => ({ target: 0 }),
-    describe: () => `Géén enkele uitgave onder €15 deze week`,
-    check: m => {
-      const n = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense'&&t.amt<15).length;
-      return { success: n === 0, progress: n === 0 ? 'Nog vlekkeloos' : `${n} kleine uitgaven — mislukt` };
-    }},
-
-  { id: 'spend_free_4', tier: 4, icon: '🧘', name: 'Vier stille dagen',
+  /* ── TIER 4: level 45-69 — zwaar ── */
+  { id: 'spend_free_4', tier: 4, icon: '🏔️', name: 'Vier stille dagen',
     build: () => ({ target: 4 }),
     describe: m => `${m.target} dagen zonder enige uitgave deze week`,
     check: m => {
@@ -242,7 +243,19 @@ const MISSIONS = [
       return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
     }},
 
-  /* ── TIER 5: level 70-100 — meesterschap ── */
+  { id: 'cat_cap_50', tier: 4, icon: '✂️', name: 'Harde snede',
+    build: () => {
+      const cat = topSpendCategory();
+      const avg = avgWeeklySpendInCat(cat);
+      return { cat, target: Math.round(Math.max(5, avg * 0.5)) };
+    },
+    describe: m => `Halveer ${m.cat} — blijf onder ${fmt(m.target)} deze week`,
+    check: m => {
+      const spent = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense'&&t.cat===m.cat).reduce((a,t)=>a+t.amt,0);
+      return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
+    }},
+
+  /* ── TIER 5: level 70-100 — meesterschap, combinaties ── */
   { id: 'combo_master', tier: 5, icon: '⚔️', name: 'Dubbele beproeving',
     build: () => {
       const avg = avgWeeklySpend();
@@ -264,6 +277,17 @@ const MISSIONS = [
       const days = daysInRange(m.weekStart, m.weekEnd);
       const free = days.filter(d => !state.transactions.some(t=>t.type==='expense'&&t.date===d)).length;
       return { success: free >= m.target, progress: `${free} van ${m.target} nuldagen` };
+    }},
+
+  { id: 'weekly_cap_40', tier: 5, icon: '💀', name: 'Veertig procent minder',
+    build: () => {
+      const avg = avgWeeklySpend();
+      return { target: Math.round(avg * 0.6) };
+    },
+    describe: m => `Blijf deze week onder ${fmt(m.target)} — 40% onder je gemiddelde`,
+    check: m => {
+      const spent = txInRange(m.weekStart, m.weekEnd).filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
+      return { success: spent <= m.target, progress: `${fmt(spent)} van ${fmt(m.target)}` };
     }},
 ];
 
