@@ -3338,3 +3338,154 @@ body.app-locked .pin-screen { visibility: visible; }
   .carry { gap: 10px; }
   .carry-val { font-size: 13px; }
 }
+
+/* ── HET DAGBUDGET ──
+   Dezelfde energie als de cyclusmeter, maar dan voor vandaag.
+   Zelfcorrigerend: onder je bedrag blijven laat het morgen stijgen. */
+.today {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: var(--r);
+}
+.today:empty { display: none; }
+
+.today-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.today-lbl {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.11em;
+  color: var(--chalk-3);
+}
+
+.today-amt {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px; font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.today-rail {
+  position: relative;
+  height: 8px;
+  padding: 2px;
+  border-radius: 5px;
+  background: var(--ink-2);
+  border: 1px solid var(--edge);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.today-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width var(--t-slow), background var(--t);
+}
+
+.today-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px; font-weight: 600;
+  color: var(--chalk-3);
+}
+
+@media (max-width: 620px) {
+  .today-amt { font-size: 20px; }
+  .today-meta { flex-direction: column; gap: 2px; }
+}
+
+/* ── VERGELIJKING MET DE VORIGE CYCLUS ──
+   Twee balken op dezelfde schaal: de bleke is toen, de gekleurde is nu.
+   Zo zie je de beweging, niet alleen de stand. */
+.cmp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  transition: background var(--t-fast);
+}
+.cmp-row:hover { background: var(--ink-3); }
+
+.cmp-dot {
+  width: 8px; height: 8px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.cmp-name {
+  min-width: 130px;
+  color: var(--chalk);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* De twee balken liggen over elkaar heen */
+.cmp-bars {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  min-width: 60px;
+}
+
+.cmp-bar {
+  position: absolute;
+  left: 0;
+  height: 6px;
+  border-radius: 3px;
+  transition: width var(--t-slow);
+}
+
+/* Toen: bleek, bovenaan */
+.cmp-bar.was {
+  top: 1px;
+  background: var(--edge-hi);
+  opacity: 0.7;
+}
+
+/* Nu: in kleur, eronder */
+.cmp-bar.nu {
+  bottom: 1px;
+}
+
+.cmp-amt {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 700;
+  color: var(--chalk);
+  min-width: 72px;
+  text-align: right;
+}
+
+.cmp-delta {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px; font-weight: 700;
+  min-width: 96px;
+  text-align: right;
+  white-space: nowrap;
+}
+.cmp-delta.up   { color: var(--ember); }
+.cmp-delta.down { color: var(--jade); }
+.cmp-delta.same { color: var(--chalk-3); }
+.cmp-delta.new  { color: var(--gold); }
+.cmp-delta.gone { color: var(--chalk-3); opacity: 0.7; }
+
+@media (max-width: 620px) {
+  .cmp-name  { min-width: 0; flex: 1; }
+  .cmp-bars  { display: none; }
+  .cmp-amt   { min-width: 64px; }
+  .cmp-delta { min-width: 78px; font-size: 10px; }
+}
