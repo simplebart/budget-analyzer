@@ -2001,7 +2001,8 @@ const SHEET_TABS = {
   savings_tx:   'SpaarmutaTies',
   categories:   'Categorieen',
   settings:     'Instellingen',
-  security:     'Beveiliging'
+  security:     'Beveiliging',
+  adventure:    'Avontuur'
 };
 
 let gsConfig = { autoSync: false };
@@ -2134,9 +2135,25 @@ async function syncToSheets() {
 
     await gsPut(SHEET_TABS.settings, [
       ['key','value'],
-      ['currency',     state.settings.currency],
-      ['theme',        state.settings.theme],
-      ['monthlyIncome',state.settings.monthlyIncome]
+      ['currency',      state.settings.currency],
+      ['theme',         state.settings.theme],
+      ['monthlyIncome', state.settings.monthlyIncome],
+      ['cycleStartDay', state.settings.cycleStartDay || 1],
+      ['userName',      state.settings.userName || '']
+    ]);
+
+    // Avontuur: level, pad, stad, missie — als JSON zodat het compact blijft
+    const adv = state.adventure || {};
+    await gsPut(SHEET_TABS.adventure, [
+      ['key','value'],
+      ['xp',              adv.xp || 0],
+      ['pathPosition',    adv.pathPosition || 0],
+      ['pathSteps',       adv.pathSteps || 0],
+      ['cityLevel',       adv.cityLevel || 0],
+      ['lastCycleReport', adv.lastCycleReport || ''],
+      ['currentMission',  JSON.stringify(adv.currentMission || null)],
+      ['missionHistory',  JSON.stringify(adv.missionHistory || [])],
+      ['stats',           JSON.stringify(adv.stats || {})]
     ]);
 
     updateSyncStatus('connected', 'Opgeslagen in Sheets');
@@ -2245,7 +2262,38 @@ async function syncFromSheets() {
         if (r[0]==='currency')      state.settings.currency      = r[1]||'€';
         if (r[0]==='theme')         state.settings.theme         = r[1]||'dark';
         if (r[0]==='monthlyIncome') state.settings.monthlyIncome = parseFloat(r[1])||0;
+        if (r[0]==='cycleStartDay') state.settings.cycleStartDay = parseInt(r[1])||1;
+        if (r[0]==='userName')      state.settings.userName      = r[1]||'';
       });
+    }
+
+    // Avontuur laden — zodat missie, level en pad op elk apparaat gelijk zijn
+    try {
+      const advRows = await gsGet(SHEET_TABS.adventure);
+      if (advRows.length > 1) {
+        if (!state.adventure) state.adventure = {};
+        const a = state.adventure;
+        advRows.slice(1).forEach(r => {
+          const k = r[0], v = r[1];
+          if (k === 'xp')              a.xp = parseInt(v) || 0;
+          if (k === 'pathPosition')    a.pathPosition = parseInt(v) || 0;
+          if (k === 'pathSteps')       a.pathSteps = parseInt(v) || 0;
+          if (k === 'cityLevel')       a.cityLevel = parseInt(v) || 0;
+          if (k === 'lastCycleReport') a.lastCycleReport = v || null;
+          if (k === 'currentMission') {
+            try { a.currentMission = v && v !== 'null' ? JSON.parse(v) : null; } catch(e) { a.currentMission = null; }
+          }
+          if (k === 'missionHistory') {
+            try { a.missionHistory = v ? JSON.parse(v) : []; } catch(e) { a.missionHistory = []; }
+          }
+          if (k === 'stats') {
+            try { a.stats = v ? JSON.parse(v) : { missionsCompleted:0, missionsFailed:0, streak:0, bestStreak:0 }; }
+            catch(e) { a.stats = { missionsCompleted:0, missionsFailed:0, streak:0, bestStreak:0 }; }
+          }
+        });
+      }
+    } catch(e) {
+      console.log('Avontuur-tab nog niet aanwezig — wordt aangemaakt bij volgende upload');
     }
 
     saveState(true); // skip autoSync to avoid loop
