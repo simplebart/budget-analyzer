@@ -888,3 +888,59 @@ function renderDashMission() {
     </div>`;
   card.style.display = '';
 }
+
+/* ═══════════════════════════════════════════════════════════
+   DE HUD — je status, zichtbaar op elke pagina
+   ═══════════════════════════════════════════════════════════ */
+function renderHUD() {
+  const hud = document.getElementById('hud');
+  if (!hud || !state.adventure) return;
+
+  // Op de avontuurpagina staat alles al uitgebreid — dan is de HUD dubbelop
+  const onAdventurePage = document.getElementById('page-achievements')?.classList.contains('active');
+  if (onAdventurePage) { hud.style.display = 'none'; return; }
+
+  ensureMission();
+
+  const lvl  = getLevelInfo();
+  const path = getPathInfo();
+  const a    = state.adventure;
+
+  hud.style.display = '';
+
+  // Level + titel
+  document.getElementById('hudCrest').textContent = lvl.icon;
+  document.getElementById('hudLvl').textContent   = `Level ${lvl.level}`;
+  document.getElementById('hudTitle').textContent = lvl.title;
+
+  // XP-rail
+  document.getElementById('hudXpNum').textContent =
+    lvl.isMax ? 'MAX' : `${lvl.xpInLevel.toLocaleString('nl-NL')} / ${lvl.xpNeeded.toLocaleString('nl-NL')}`;
+  document.getElementById('hudXpFill').style.width = lvl.progress + '%';
+
+  // Halte + stappen als pips
+  document.getElementById('hudQuestIcon').textContent = path.current.icon;
+  document.getElementById('hudQuestName').textContent = path.current.name;
+  document.getElementById('hudPips').innerHTML =
+    Array.from({ length: path.stepsNeeded }, (_, i) =>
+      `<span class="hud-pip ${i < path.stepsDone ? 'on' : ''}"></span>`
+    ).join('');
+
+  // Missiestatus
+  const misEl  = document.getElementById('hudMission');
+  const misTxt = document.getElementById('hudMissionText');
+  if (a.currentMission) {
+    const tpl = MISSIONS.find(m => m.id === a.currentMission.id);
+    if (tpl) {
+      const res  = tpl.check(a.currentMission);
+      const days = Math.max(0, Math.ceil(
+        (new Date(a.currentMission.weekEnd + 'T23:59:59') - new Date()) / 86400000
+      ));
+      misEl.className = 'hud-mission ' + (res.success ? 'on-track' : 'at-risk');
+      misTxt.textContent = `${tpl.icon} ${res.success ? 'Op koers' : 'Nog niet'} · ${days}d`;
+      misEl.style.display = '';
+      return;
+    }
+  }
+  misEl.style.display = 'none';
+}
