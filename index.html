@@ -125,51 +125,102 @@
 
 
     <!-- ══════════════ DASHBOARD ══════════════ -->
+    <!-- ══════════════ DASHBOARD ══════════════ -->
     <section class="page active" id="page-dashboard">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Dashboard</h1>
-          <p class="page-sub" id="dashSub"></p>
+
+      <!-- ═══ HET SPEELBORD — de held van de pagina ═══
+           Eén paneel beantwoordt alles: wat heb ik nog, waar sta ik
+           in de cyclus, en wat is mijn volgende zet. -->
+      <div class="board">
+
+        <div class="board-main">
+          <div class="board-eyebrow" id="boardEyebrow">Nog te besteden</div>
+          <div class="board-amount" id="boardAmount">€0,00</div>
+
+          <!-- De cyclusmeter: je budget als energiecellen -->
+          <div class="board-meter" id="boardMeter">
+            <div class="board-meter-fill" id="boardMeterFill"></div>
+            <div class="board-meter-today" id="boardMeterToday" title="vandaag"></div>
+          </div>
+
+          <div class="board-meter-meta">
+            <span id="boardSpent">€0 uitgegeven</span>
+            <span id="boardDays">— dagen te gaan</span>
+          </div>
+
+          <div class="board-stats">
+            <div class="board-stat">
+              <span class="board-stat-lbl">Binnen</span>
+              <span class="board-stat-val" id="boardIn">€0</span>
+            </div>
+            <div class="board-stat">
+              <span class="board-stat-lbl">Eruit</span>
+              <span class="board-stat-val" id="boardOut">€0</span>
+            </div>
+            <div class="board-stat">
+              <span class="board-stat-lbl">Per dag</span>
+              <span class="board-stat-val" id="boardBurn">€0</span>
+            </div>
+            <div class="board-stat">
+              <span class="board-stat-lbl">Gespaard</span>
+              <span class="board-stat-val" id="boardSaved">0%</span>
+            </div>
+          </div>
         </div>
-        <button class="btn-primary" onclick="openModal('addTransaction')">+ Transactie</button>
+
+        <!-- De volgende zet -->
+        <div class="board-quest" id="boardQuest" onclick="navigate('achievements')">
+          <div class="board-quest-inner" id="boardQuestInner"></div>
+        </div>
       </div>
 
-      <!-- ── MOBIELE HERO — alleen zichtbaar op mobiel ── -->
-      <div class="mobile-hero" id="mobileHero">
-        <div class="mobile-hero-label" id="mobileHeroLabel">Nog te besteden deze cyclus</div>
-        <div class="mobile-hero-amount" id="mobileHeroAmount">€0,00</div>
-        <div class="mobile-hero-ring-wrap">
-          <div class="mobile-hero-track">
-            <div class="mobile-hero-fill" id="mobileHeroFill"></div>
-            <div class="mobile-hero-marker" id="mobileHeroMarker" title="Vandaag"></div>
-          </div>
-          <div class="mobile-hero-meta">
-            <span id="mobileHeroSpent">€0 uitgegeven</span>
-            <span id="mobileHeroDays">— dagen te gaan</span>
-          </div>
+      <!-- ═══ Waar het heen ging ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Waar het heen ging</h2>
+        <span class="strip-meta" id="catStripMeta"></span>
+      </section>
+
+      <div class="split">
+        <div class="card">
+          <div id="dashCatList" class="cat-breakdown-list"></div>
         </div>
-        <div class="mobile-hero-stats">
-          <div class="mobile-stat">
-            <div class="mobile-stat-val" id="mobileStatToday">€0</div>
-            <div class="mobile-stat-lbl">vandaag</div>
+        <div class="card chart-card">
+          <div class="chart-wrap" style="height:230px">
+            <canvas id="categoryChart"></canvas>
           </div>
-          <div class="mobile-stat">
-            <div class="mobile-stat-val" id="mobileStatWeek">€0</div>
-            <div class="mobile-stat-lbl">deze week</div>
+          <div class="donut-center" style="display:none">
+            <div class="donut-total" id="donutTotal">€0</div>
+            <div class="donut-lbl">totaal</div>
           </div>
-          <div class="mobile-stat">
-            <div class="mobile-stat-val" id="mobileStatSaved">0%</div>
-            <div class="mobile-stat-lbl">gespaard</div>
-          </div>
+          <div class="donut-legend" id="donutLegend" style="display:none"></div>
         </div>
       </div>
 
-      <!-- Missie van de week op dashboard -->
-      <div class="card adv-mission-widget" id="dashMissionCard" style="display:none" onclick="navigate('achievements')">
-        <div id="dashMission"></div>
+      <!-- ═══ Laatste zetten ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Laatste zetten</h2>
+        <button class="link-btn" onclick="navigate('transactions')">Alles zien →</button>
+      </section>
+
+      <div class="card recent-card">
+        <div class="tx-mini-list" id="recentTxList">
+          <div class="empty-state">Nog geen transacties. Tik op + om te beginnen.</div>
+        </div>
       </div>
 
-      <!-- Coach tip op dashboard (compact) -->
+      <!-- ═══ De cyclus tot nu toe ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">De cyclus tot nu toe</h2>
+        <div id="cashflowLegend" class="chart-legend"></div>
+      </section>
+
+      <div class="card chart-card">
+        <div class="chart-wrap" style="height:250px">
+          <canvas id="cashflowChart"></canvas>
+        </div>
+      </div>
+
+      <!-- ═══ Coach ═══ -->
       <div class="card coach-card" id="dashCoachCard" style="display:none">
         <div class="coach-header">
           <span class="coach-icon">🧠</span>
@@ -178,102 +229,6 @@
         <div id="dashCoachTip" class="coach-tips"></div>
       </div>
 
-      <div class="kpi-grid" id="kpiGrid">
-        <div class="kpi-card kpi-income">
-          <div class="kpi-top"><span class="kpi-label">Inkomsten</span><span class="kpi-icon income-icon">↑</span></div>
-          <div class="kpi-value" id="kpiIncome">€0</div>
-          <div class="kpi-bar-wrap"><div class="kpi-bar income-bar" style="width:100%"></div></div>
-        </div>
-        <div class="kpi-card kpi-expense">
-          <div class="kpi-top"><span class="kpi-label">Uitgaven</span><span class="kpi-icon expense-icon">↓</span></div>
-          <div class="kpi-value" id="kpiExpense">€0</div>
-          <div class="kpi-bar-wrap"><div class="kpi-bar expense-bar" id="kpiExpenseBar" style="width:0%"></div></div>
-        </div>
-        <div class="kpi-card kpi-transfer">
-          <div class="kpi-top"><span class="kpi-label">Transfers</span><span class="kpi-icon transfer-icon">⇄</span></div>
-          <div class="kpi-value" id="kpiTransfer">€0</div>
-          <div class="kpi-sub" id="kpiTransferSub">0 transfers</div>
-        </div>
-        <div class="kpi-card kpi-balance">
-          <div class="kpi-top"><span class="kpi-label">Netto saldo</span><span class="kpi-icon" id="kpiBalIcon">◎</span></div>
-          <div class="kpi-value" id="kpiBalance">€0</div>
-          <div class="kpi-sub" id="kpiBalSub">van inkomsten</div>
-        </div>
-        <div class="kpi-card kpi-score">
-          <div class="kpi-top"><span class="kpi-label">Budget score</span><span class="kpi-icon score-icon">★</span></div>
-          <div class="kpi-value" id="kpiScore">—</div>
-          <div class="kpi-sub" id="kpiScoreLabel">Voeg data toe</div>
-        </div>
-      </div>
-      <div class="charts-row">
-        <div class="card chart-card">
-          <div class="card-header">
-            <span class="card-title">Cashflow overzicht</span>
-            <div class="chart-legend" id="cashflowLegend"></div>
-          </div>
-          <div class="chart-wrap" style="height:220px"><canvas id="cashflowChart" aria-label="Cashflow staafdiagram per maand"></canvas></div>
-        </div>
-        <div class="card chart-card">
-          <div class="card-header"><span class="card-title">Uitgaven per categorie</span></div>
-          <div class="donut-wrap">
-            <canvas id="donutChart" aria-label="Donut chart uitgaven per categorie"></canvas>
-            <div class="donut-center">
-              <div class="donut-total" id="donutTotal">€0</div>
-              <div class="donut-lbl">totaal</div>
-            </div>
-          </div>
-          <div class="donut-legend" id="donutLegend"></div>
-        </div>
-      </div>
-      <div class="bottom-row">
-        <div class="card health-card">
-          <div class="card-header"><span class="card-title">Budget gezondheid</span></div>
-          <div class="health-body">
-            <div class="health-ring-wrap">
-              <svg class="health-svg" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="48" class="ring-bg"/>
-                <circle cx="60" cy="60" r="48" class="ring-fill" id="healthRing" stroke-dasharray="301.6" stroke-dashoffset="301.6" transform="rotate(-90 60 60)"/>
-              </svg>
-              <div class="health-center">
-                <div class="health-score" id="healthScore">0</div>
-                <div class="health-max">/100</div>
-              </div>
-            </div>
-            <div class="health-breakdown" id="healthBreakdown"></div>
-          </div>
-        </div>
-        <div class="card recent-card">
-          <div class="card-header">
-            <span class="card-title">Recente transacties</span>
-            <button class="link-btn" onclick="navigate('transactions')">Alles zien →</button>
-          </div>
-          <div class="tx-mini-list" id="recentTxList"><div class="empty-state">Nog geen transacties</div></div>
-        </div>
-        <div class="card burn-card">
-          <div class="card-header"><span class="card-title">Burn rate</span></div>
-          <div class="burn-stats">
-            <div class="burn-stat"><div class="burn-val" id="burnDaily">€0</div><div class="burn-lbl">per dag</div></div>
-            <div class="burn-divider"></div>
-            <div class="burn-stat"><div class="burn-val" id="burnWeekly">€0</div><div class="burn-lbl">per week</div></div>
-            <div class="burn-divider"></div>
-            <div class="burn-stat"><div class="burn-val" id="burnProjected">€0</div><div class="burn-lbl">projectie</div></div>
-          </div>
-          <div class="projection-bar-wrap">
-            <div class="proj-labels"><span>Huidig</span><span>Einde maand</span></div>
-            <div class="proj-track">
-              <div class="proj-fill" id="projFill" style="width:0%"></div>
-              <div class="proj-marker" id="projMarker" style="left:0%"></div>
-            </div>
-            <div class="proj-values"><span id="projCurrent">€0</span><span id="projEnd">€0</span></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- MONTH COMPARISON -->
-      <div class="card" style="margin-top:14px">
-        <div class="card-header"><span class="card-title">Vergelijking vorige maand</span></div>
-        <div id="monthCompare"><div class="empty-state" style="padding:12px">Nog niet genoeg data</div></div>
-      </div>
     </section>
 
     <!-- ══════════════ TRANSACTIONS ══════════════ -->
