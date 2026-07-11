@@ -910,3 +910,29 @@ function renderHUD() {
   }
   misEl.style.display = 'none';
 }
+
+
+/* ── Het personagepaneel in de zijbalk ── */
+function renderPlayer() {
+  const crest = document.getElementById('sbCrest');
+  if (!crest || !state.adventure) return;
+
+  ensureMission();
+  const lvl  = getLevelInfo();
+  const path = getPathInfo();
+
+  crest.textContent = lvl.icon;
+  document.getElementById('sbTitle').textContent = lvl.title;
+  document.getElementById('sbLvl').textContent   = `Level ${lvl.level}`;
+
+  document.getElementById('sbXpFill').style.width = lvl.progress + '%';
+  document.getElementById('sbXpNum').textContent  = lvl.isMax
+    ? 'Maximum bereikt'
+    : `${lvl.xpInLevel.toLocaleString('nl-NL')} / ${lvl.xpNeeded.toLocaleString('nl-NL')} XP`;
+
+  document.getElementById('sbStopIcon').textContent = path.current.icon;
+  document.getElementById('sbStopName').textContent = path.current.name;
+  document.getElementById('sbPips').innerHTML =
+    Array.from({ length: path.stepsNeeded }, (_, i) =>
+      `<span class="hud-pip ${i < path.stepsDone ? 'on' : ''}"></span>`).join('');
+}
