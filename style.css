@@ -2277,7 +2277,6 @@ input[type="text"]:focus, input[type="number"]:focus, input[type="date"]:focus {
 /* ═══════════════════════════════════════════════════════════
    MOBIELE HERO (verborgen op desktop)
    ═══════════════════════════════════════════════════════════ */
-.mobile-hero { display: none; }
 
 /* ═══════════════════════════════════════════════════════════
    PINCODE-SCHERM — de poort
@@ -2519,118 +2518,6 @@ body.app-locked .pin-screen { visibility: visible; }
   .hud-title { font-size: 10px; }
   .hud-quest, .hud-mission { display: none; }
 
-  /* ═══ MOBIELE HERO ═══
-     Eén getal telt: wat kun je nog uitgeven. */
-  .mobile-hero {
-    display: block;
-    position: relative;
-    padding: 24px 20px 20px;
-    margin-bottom: 14px;
-    background: linear-gradient(155deg,
-      color-mix(in srgb, var(--lilac) 10%, var(--ink-2)),
-      var(--ink-2) 62%);
-    border: 1px solid var(--edge-hi);
-    border-radius: var(--r-xl);
-    box-shadow: var(--lift-2);
-    overflow: hidden;
-  }
-
-  .mobile-hero::before {
-    content: '';
-    position: absolute;
-    top: -70px; right: -60px;
-    width: 190px; height: 190px;
-    border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--gold) 16%, transparent), transparent 68%);
-    pointer-events: none;
-  }
-
-  .mobile-hero-label { margin-bottom: 7px; }
-
-  .mobile-hero-amount {
-    font-size: 42px;
-    font-weight: 800;
-    line-height: 1;
-    letter-spacing: -0.04em;
-    color: var(--chalk);
-    margin-bottom: 20px;
-  }
-
-  /* De cyclusmeter: gesegmenteerd, als een health bar */
-  /* ═══ DE CYCLUSMETER ═══
-     Je budget is je energie voor deze cyclus. Uitgeven tapt cellen af.
-     Het rooster ligt op de baan, niet op de vulling — zo houden de
-     cellen dezelfde breedte, hoe vol de balk ook staat. */
-  .mobile-hero-track {
-    position: relative;
-    height: 16px;
-    padding: 3px;
-    border-radius: 8px;
-    background: var(--ink);
-    border: 1px solid var(--edge);
-    margin-bottom: 9px;
-  }
-
-  .mobile-hero-fill {
-    height: 100%;
-    border-radius: 3px;
-    background: var(--jade);
-    transition: width var(--t-slow), background var(--t);
-  }
-
-  /* Het rooster: verft cellen uit de vulling weg */
-  .mobile-hero-track::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    z-index: 1;
-    pointer-events: none;
-    border-radius: 3px;
-    background: repeating-linear-gradient(90deg,
-      transparent 0 calc(100% / 20 - 3px),
-      var(--ink)  calc(100% / 20 - 3px) calc(100% / 20));
-  }
-
-  .mobile-hero-marker {
-    position: absolute;
-    top: -4px;
-    z-index: 2;
-    width: 3px; height: 22px;
-    border-radius: 2px;
-    background: var(--chalk);
-    box-shadow: 0 0 9px var(--chalk);
-    transform: translateX(-50%);
-    transition: left var(--t-slow);
-  }
-
-  .mobile-hero-meta {
-    display: flex; justify-content: space-between;
-    font-size: 11px; font-weight: 600;
-    color: var(--chalk-3);
-    margin-bottom: 18px;
-  }
-
-  .mobile-hero-stats { display: flex; gap: 8px; }
-
-  .mobile-stat {
-    flex: 1;
-    padding: 11px 8px;
-    background: var(--ink);
-    border: 1px solid var(--edge);
-    border-radius: var(--r-sm);
-    text-align: center;
-  }
-  .mobile-stat-val { font-size: 16px; font-weight: 800; color: var(--chalk); }
-  .mobile-stat-lbl { margin-top: 2px; }
-
-  /* ─── Wat wijkt op het dashboard ─── */
-  #page-dashboard .kpi-grid   { display: none; }
-  #page-dashboard .charts-row { display: none; }
-  #page-dashboard .health-card { display: none; }
-  #page-dashboard .burn-card   { display: none; }
-  #page-dashboard #monthCompare { display: none; }
-  #page-dashboard .bottom-row { display: block; }
-  #page-dashboard .recent-card { margin-bottom: 0; }
 
   /* ─── Panelen ─── */
   .card, .budget-card, .goal-card, .savings-acc-card {
@@ -2838,3 +2725,279 @@ body.app-locked .pin-screen { visibility: visible; }
 /* De actieknop in de topbar — alleen zichtbaar waar hij hoort */
 .topbar-action { flex-shrink: 0; }
 @media (min-width: 621px) { .topbar-action { display: none; } }
+
+/* ═══════════════════════════════════════════════════════════
+   HET SPEELBORD — de held van het dashboard
+   Eén paneel beantwoordt alles: wat heb ik nog, waar sta ik in
+   de cyclus, en wat is mijn volgende zet. Al het andere is
+   ondergeschikt en mag zwijgen.
+   ═══════════════════════════════════════════════════════════ */
+.board {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 1px;                      /* de naad is de scheidslijn */
+  margin-bottom: 30px;
+  background: var(--edge);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-xl);
+  box-shadow: var(--lift-2);
+  overflow: hidden;
+}
+
+.board-main {
+  position: relative;
+  padding: 28px 30px;
+  background: linear-gradient(155deg,
+    color-mix(in srgb, var(--lilac) 9%, var(--ink-2)),
+    var(--ink-2) 58%);
+}
+
+/* Eén lichtbron rechtsboven, alsof het bord belicht wordt */
+.board-main::before {
+  content: '';
+  position: absolute;
+  top: -90px; right: -70px;
+  width: 260px; height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 13%, transparent), transparent 68%);
+  pointer-events: none;
+}
+
+.board-eyebrow { margin-bottom: 8px; }
+
+.board-amount {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(38px, 4.4vw, 56px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  color: var(--chalk);
+  margin-bottom: 24px;
+}
+
+/* ─── De cyclusmeter: je budget als energiecellen ─── */
+.board-meter {
+  position: relative;
+  height: 20px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  margin-bottom: 10px;
+}
+
+.board-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--jade);
+  transition: width var(--t-slow), background var(--t);
+}
+
+/* Het rooster hakt de balk in cellen. Ligt op de baan, niet op de
+   vulling — zo blijven de cellen even breed, hoe vol hij ook staat. */
+.board-meter::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 4px;
+  background: repeating-linear-gradient(90deg,
+    transparent 0 calc(100% / 24 - 4px),
+    var(--ink)  calc(100% / 24 - 4px) calc(100% / 24));
+}
+
+/* Waar staat de klok? Loopt je uitgeven voor op de tijd? */
+.board-meter-today {
+  position: absolute;
+  top: -5px;
+  z-index: 2;
+  width: 3px; height: 26px;
+  border-radius: 2px;
+  background: var(--chalk);
+  box-shadow: 0 0 10px var(--chalk);
+  transform: translateX(-50%);
+  transition: left var(--t-slow);
+}
+
+.board-meter-meta {
+  display: flex; justify-content: space-between;
+  font-size: 12px; font-weight: 600;
+  color: var(--chalk-3);
+  margin-bottom: 24px;
+}
+
+/* ─── De ondersteunende cijfers: klein, want ze zijn niet de held ─── */
+.board-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--edge);
+  border: 1px solid var(--edge);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.board-stat {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 13px 12px;
+  background: var(--ink);
+}
+
+.board-stat-lbl {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.11em;
+  color: var(--chalk-3);
+}
+
+.board-stat-val {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px; font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--chalk);
+  white-space: nowrap;
+}
+
+/* ─── De volgende zet: de missie, als kaart op het bord ─── */
+.board-quest {
+  padding: 26px 24px;
+  background: var(--ink-2);
+  cursor: pointer;
+  transition: background var(--t-fast);
+  display: flex;
+}
+.board-quest:hover { background: var(--ink-3); }
+
+.board-quest-inner {
+  display: flex; flex-direction: column;
+  width: 100%;
+}
+
+.board-quest-eyebrow {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--lilac);
+  margin-bottom: 14px;
+}
+
+.board-quest-icon {
+  font-size: 34px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.board-quest-name {
+  font-family: var(--font-display);
+  font-size: 19px; font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--chalk);
+  margin-bottom: 6px;
+}
+
+.board-quest-desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--chalk-2);
+  margin-bottom: 16px;
+}
+
+.board-quest-state {
+  padding: 9px 12px;
+  margin-bottom: 14px;
+  border-radius: var(--r-sm);
+  font-size: 12px; font-weight: 700;
+}
+.board-quest-state.good { color: var(--jade); background: var(--jade-dim); }
+.board-quest-state.bad  { color: var(--gold); background: var(--gold-dim); }
+
+.board-quest-pips {
+  display: flex; gap: 5px;
+  margin-bottom: 14px;
+}
+
+.board-quest-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--edge);
+  font-size: 11px; font-weight: 600;
+  color: var(--chalk-3);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTIEKOPPEN — het ritme tussen de blokken
+   Ze verdelen de pagina in hoofdstukken, zodat niet alles
+   even hard schreeuwt.
+   ═══════════════════════════════════════════════════════════ */
+.strip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 30px 0 12px;
+}
+.strip:first-of-type { margin-top: 0; }
+
+.strip-title {
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--chalk);
+}
+
+/* Een fijne lijn die de kop met de pagina verbindt */
+.strip::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--edge);
+  order: 1;
+}
+.strip-title  { order: 0; }
+.strip-meta,
+.strip .link-btn,
+.strip .chart-legend { order: 2; flex-shrink: 0; }
+
+.strip-meta {
+  font-size: 12px; font-weight: 600;
+  color: var(--chalk-3);
+}
+
+/* Twee kolommen onder een sectiekop */
+.split {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 14px;
+}
+
+/* ─── Het speelbord op smallere schermen ─── */
+@media (max-width: 1000px) {
+  .board { grid-template-columns: 1fr; }
+  .split { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .board {
+    margin-bottom: 22px;
+    border-radius: var(--r-lg);
+  }
+  .board-main  { padding: 22px 18px; }
+  .board-quest { padding: 20px 18px; }
+
+  .board-amount { font-size: 40px; margin-bottom: 20px; }
+
+  .board-stats { grid-template-columns: 1fr 1fr; }
+
+  /* Minder cellen op een smal scherm, anders worden ze streepjes */
+  .board-meter::after {
+    background: repeating-linear-gradient(90deg,
+      transparent 0 calc(100% / 14 - 3px),
+      var(--ink)  calc(100% / 14 - 3px) calc(100% / 14));
+  }
+
+  .strip { margin: 24px 0 10px; }
+  .strip-title { font-size: 15px; }
+  .strip::after { display: none; }
+}
