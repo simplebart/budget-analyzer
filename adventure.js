@@ -847,54 +847,20 @@ function renderAdventure() {
   }
 }
 
-/* ── Compacte missie-widget op het dashboard ── */
-function renderDashMission() {
-  const card = document.getElementById('dashMissionCard');
-  const el   = document.getElementById('dashMission');
-  if (!card || !el) return;
-
-  ensureMission();
-  const a = state.adventure;
-  if (!a.currentMission) { card.style.display = 'none'; return; }
-
-  const tpl = MISSIONS.find(m => m.id === a.currentMission.id);
-  if (!tpl) { card.style.display = 'none'; return; }
-
-  const res = tpl.check(a.currentMission);
-  const daysLeft = Math.max(0, Math.ceil((new Date(a.currentMission.weekEnd + 'T23:59:59') - new Date()) / 86400000));
-  const lvl = getLevelInfo();
-
-  const path = getPathInfo();
-
-  el.innerHTML = `
-    <div class="dash-mis-head">
-      <span class="dash-mis-icon">${tpl.icon}</span>
-      <div class="dash-mis-body">
-        <div class="dash-mis-label">Missie · nog ${daysLeft} ${daysLeft===1?'dag':'dagen'}</div>
-        <div class="dash-mis-desc">${tpl.describe(a.currentMission)}</div>
-      </div>
-      <span class="dash-mis-arrow">›</span>
-    </div>
-    <div class="dash-mis-foot">
-      <span class="dash-mis-status ${res.success ? 'good' : 'bad'}">${res.success ? '✓' : '○'} ${res.progress}</span>
-      <span class="dash-mis-path">
-        <span class="adv-step-track mini">
-          ${Array.from({length: path.stepsNeeded}, (_, i) =>
-            `<span class="adv-step-dot ${i < path.stepsDone ? 'filled' : ''}"></span>`
-          ).join('')}
-        </span>
-        <span class="dash-mis-lvl">${lvl.icon} Lv.${lvl.level}</span>
-      </span>
-    </div>`;
-  card.style.display = '';
-}
 
 /* ═══════════════════════════════════════════════════════════
    DE HUD — je status, zichtbaar op elke pagina
    ═══════════════════════════════════════════════════════════ */
 function renderHUD() {
   const hud = document.getElementById('hud');
-  if (!hud || !state.adventure) return;
+  if (!hud) return;
+
+  // Vang een ontbrekende avontuur-state op i.p.v. stil te falen
+  if (!state.adventure) {
+    state.adventure = { xp:0, pathPosition:0, pathSteps:0, cityLevel:0,
+      currentMission:null, missionHistory:[], lastCycleReport:null,
+      stats:{missionsCompleted:0,missionsFailed:0,streak:0,bestStreak:0} };
+  }
 
   // Op de avontuurpagina staat alles al uitgebreid — dan is de HUD dubbelop
   const onAdventurePage = document.getElementById('page-achievements')?.classList.contains('active');
