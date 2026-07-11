@@ -3489,3 +3489,56 @@ body.app-locked .pin-screen { visibility: visible; }
   .cmp-amt   { min-width: 64px; }
   .cmp-delta { min-width: 78px; font-size: 10px; }
 }
+
+/* ── HET GAT ──
+   Een budget dat op verouderde cijfers leunt is een leugen, geen
+   schatting. Dus vraagt de app het, in plaats van te gokken. */
+.gap {
+  padding: 2px 0;
+}
+
+.gap-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 10px;
+}
+
+.gap-icon { font-size: 20px; line-height: 1; }
+
+.gap-title {
+  font-family: var(--font-display);
+  font-size: 15px; font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--gold);
+}
+
+.gap-sub {
+  font-size: 11px; font-weight: 600;
+  color: var(--chalk-3);
+  margin-top: 1px;
+}
+
+.gap-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--chalk-2);
+  margin-bottom: 12px;
+}
+
+.gap-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Het gat neemt de plek van het budget in — dus dezelfde omlijsting,
+   maar in de kleur van een waarschuwing. */
+.today:has(.gap) {
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--edge));
+  background: linear-gradient(150deg, var(--gold-dim), var(--ink) 60%);
+}
+
+@media (max-width: 620px) {
+  .gap-actions { flex-direction: column; }
+  .gap-actions button { width: 100%; }
+}
