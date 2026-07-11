@@ -1365,127 +1365,160 @@ function renderCoach() {
 /* ═══════════════════════════════════════════════
    MOBIELE HERO — "nog te besteden" als hoofdgetal
    ═══════════════════════════════════════════════ */
-function renderMobileHero() {
-  const el = document.getElementById('mobileHero');
-  if (!el) return;
-
-  const m = computeMetrics();
-  const { start, end } = getCurrentCycleRange();
-  const totalDays = getCycleTotalDays();
-  const dayProgress = Math.max(1, getCycleDayProgress());
-  const daysLeft = Math.max(0, totalDays - dayProgress);
-
-  // "Nog te besteden" = inkomen - uitgaven (- verwachte vaste lasten al meegenomen in projectie)
-  const remaining = m.income - m.expense;
-  const amountEl = document.getElementById('mobileHeroAmount');
-  amountEl.textContent = fmt(Math.max(0, remaining));
-  amountEl.style.color = remaining >= 0 ? 'var(--text)' : 'var(--red)';
-  if (remaining < 0) {
-    document.getElementById('mobileHeroLabel').textContent = 'Over budget deze cyclus';
-    amountEl.textContent = '-' + fmt(Math.abs(remaining));
-  } else {
-    document.getElementById('mobileHeroLabel').textContent = 'Nog te besteden deze cyclus';
-  }
-
-  // Voortgangsbalk: hoeveel van het inkomen is al uitgegeven
-  const spentPct = m.income > 0 ? Math.min(100, (m.expense / m.income) * 100) : 0;
-  const fillEl = document.getElementById('mobileHeroFill');
-  fillEl.style.width = spentPct + '%';
-  fillEl.style.background = spentPct > 90 ? 'var(--red)' : spentPct > 70 ? 'var(--amber)' : 'var(--green)';
-
-  // Marker voor "waar we in de cyclus zitten"
-  const timePct = Math.min(100, (dayProgress / totalDays) * 100);
-  document.getElementById('mobileHeroMarker').style.left = timePct + '%';
-
-  document.getElementById('mobileHeroSpent').textContent = fmt(m.expense) + ' uitgegeven';
-  document.getElementById('mobileHeroDays').textContent  = daysLeft + (daysLeft === 1 ? ' dag' : ' dagen') + ' te gaan';
-
-  // Mini stats
-  const todayStr = today();
-  const todaySpent = state.transactions.filter(t=>t.type==='expense'&&t.date===todayStr).reduce((a,t)=>a+t.amt,0);
-
-  // Deze week (ma t/m nu)
-  const now = new Date();
-  const dow = (now.getDay()+6)%7; // ma=0
-  const weekStart = new Date(now); weekStart.setDate(weekStart.getDate()-dow);
-  const weekStartStr = dateToStr(weekStart);
-  const weekSpent = state.transactions.filter(t=>t.type==='expense'&&t.date>=weekStartStr&&t.date<=todayStr).reduce((a,t)=>a+t.amt,0);
-
-  const savedPct = m.income>0 ? Math.max(0, Math.round((m.balance/m.income)*100)) : 0;
-
-  document.getElementById('mobileStatToday').textContent = fmt(todaySpent);
-  document.getElementById('mobileStatWeek').textContent  = fmt(weekSpent);
-  document.getElementById('mobileStatSaved').textContent = savedPct + '%';
-}
 
 /* ═══════════════════════════════════════════════
    RENDER DASHBOARD
    ═══════════════════════════════════════════════ */
 function renderDashboard(){
-  const now=new Date();
-  const userName = state.settings.userName||'';
-  document.getElementById('dashSub').textContent = (userName ? userName + ' · ' : '') + cycleLabel();
-  document.getElementById('sidebarMonth').textContent=cycleLabel();
-  const{income,expense,transfer,balance,cats,burnDaily,projected,score,breakdown}=computeMetrics();
-  const transCount=getCurrentMonthTx().filter(t=>t.type==='transfer').length;
+  document.getElementById('sidebarMonth').textContent = cycleLabel();
 
-  document.getElementById('kpiIncome').textContent=fmt(income);
-  document.getElementById('kpiExpense').textContent=fmt(expense);
-  document.getElementById('kpiTransfer').textContent=fmt(transfer);
-  document.getElementById('kpiTransferSub').textContent=transCount+' transfer'+(transCount!==1?'s':'');
-  document.getElementById('kpiBalance').textContent=fmt(Math.abs(balance));
-  document.getElementById('kpiBalance').style.color=balance>=0?'var(--green)':'var(--red)';
-  document.getElementById('kpiBalSub').textContent=income>0?Math.round((balance/income)*100)+'% van inkomsten':'van inkomsten';
-  document.getElementById('kpiExpenseBar').style.width=income>0?Math.min(100,(expense/income)*100)+'%':'0%';
-  document.getElementById('kpiScore').textContent=income>0?score:'—';
-  document.getElementById('kpiScoreLabel').textContent=score>=80?'Uitstekend':score>=60?'Goed':score>=40?'Matig':income>0?'Aandacht':'Voeg data toe';
+  const { income, expense, transfer, balance, cats, burnDaily } = computeMetrics();
+  const { start, end } = getCurrentCycleRange();
+  const totalDays   = getCycleTotalDays();
+  const dayProgress = Math.max(1, Math.min(totalDays, getCycleDayProgress()));
+  const daysLeft    = Math.max(0, totalDays - dayProgress);
 
-  renderCashflowChart();
-  renderDonutChart(cats);
+  /* ── HET SPEELBORD ── */
+  const remaining = income - expense;
+  const over      = remaining < 0;
 
-  const arc=document.getElementById('healthRing');
-  arc.style.strokeDashoffset=301.6-(301.6*score/100);
-  arc.style.stroke=score>=70?'var(--green)':score>=40?'var(--amber)':'var(--red)';
-  document.getElementById('healthScore').textContent=score;
-  document.getElementById('healthBreakdown').innerHTML=breakdown.map(b=>{
-    const pct=Math.round((b.pts/b.max)*100);
-    const col=pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
-    return `<div class="health-item"><span class="health-item-name">${b.name}</span><span class="health-item-pts" style="color:${col}">${b.pts}/${b.max}</span></div>`;
-  }).join('')||'<div class="empty-state" style="padding:8px;font-size:12px">Voeg data toe</div>';
+  document.getElementById('boardEyebrow').textContent =
+    over ? 'Over budget deze cyclus' : 'Nog te besteden';
 
-  const recent=[...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
-  document.getElementById('recentTxList').innerHTML=recent.length?recent.map(t=>{
-    const col=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':catColor(t.cat);
-    const amtCol=t.type==='income'?'var(--green)':t.type==='transfer'?'var(--purple)':'var(--red)';
-    const sign=t.type==='income'?'+':t.type==='transfer'?'⇄':'−';
-    return `<div class="tx-mini-row" onclick="editTx(${t.id})" style="cursor:pointer">
+  const amtEl = document.getElementById('boardAmount');
+  amtEl.textContent = (over ? '−' : '') + fmt(Math.abs(remaining));
+  amtEl.style.color = over ? 'var(--ember)' : 'var(--chalk)';
+
+  // De cyclusmeter: hoeveel van je inkomen is nog niet uitgegeven
+  const spentPct = income > 0 ? Math.min(100, (expense / income) * 100) : 0;
+  const leftPct  = Math.max(0, 100 - spentPct);
+  const fill = document.getElementById('boardMeterFill');
+  fill.style.width = leftPct + '%';
+  fill.style.background =
+    leftPct <= 10 ? 'var(--ember)' :
+    leftPct <= 30 ? 'var(--gold)'  : 'var(--jade)';
+
+  // Waar staan we in de tijd? Loopt het uitgeven voor op de klok?
+  const timePct = (dayProgress / totalDays) * 100;
+  document.getElementById('boardMeterToday').style.left = (100 - timePct) + '%';
+
+  document.getElementById('boardSpent').textContent = fmt(expense) + ' uitgegeven';
+  document.getElementById('boardDays').textContent  =
+    daysLeft === 0 ? 'laatste dag' : `nog ${daysLeft} ${daysLeft === 1 ? 'dag' : 'dagen'}`;
+
+  document.getElementById('boardIn').textContent    = fmt(income);
+  document.getElementById('boardOut').textContent   = fmt(expense);
+  document.getElementById('boardBurn').textContent  = fmt(burnDaily);
+  document.getElementById('boardSaved').textContent =
+    income > 0 ? Math.max(0, Math.round((balance / income) * 100)) + '%' : '—';
+
+  /* ── De volgende zet: de missie ── */
+  renderBoardQuest();
+
+  /* ── Waar het heen ging ── */
+  renderDashCategories(cats, expense);
+
+  /* ── Laatste zetten ── */
+  const recent = [...state.transactions]
+    .sort((a,b) => b.date.localeCompare(a.date))
+    .slice(0, 7);
+
+  document.getElementById('recentTxList').innerHTML = recent.length ? recent.map(t => {
+    const col    = t.type==='income' ? 'var(--jade)' : t.type==='transfer' ? 'var(--lilac)' : catColor(t.cat);
+    const amtCol = t.type==='income' ? 'var(--jade)' : t.type==='transfer' ? 'var(--lilac)' : 'var(--ember)';
+    const sign   = t.type==='income' ? '+' : t.type==='transfer' ? '⇄' : '−';
+    const d = new Date(t.date + 'T12:00:00');
+    return `<div class="tx-mini-row" onclick="editTx(${t.id})">
       <span class="tx-mini-dot" style="background:${col}"></span>
       <span class="tx-mini-name">${t.desc}</span>
-      <span class="tx-mini-cat">${t.cat}</span>
+      <span class="tx-mini-cat">${d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}</span>
       <span class="tx-mini-amt" style="color:${amtCol}">${sign}${fmt(t.amt)}</span>
     </div>`;
-  }).join(''):'<div class="empty-state">Nog geen transacties</div>';
+  }).join('') : '<div class="empty-state">Nog geen transacties. Tik op + om te beginnen.</div>';
 
-  document.getElementById('burnDaily').textContent=fmt(burnDaily);
-  document.getElementById('burnWeekly').textContent=fmt(burnDaily*7);
-  document.getElementById('burnProjected').textContent=fmt(projected);
-  const cycleDay=Math.max(1,getCycleDayProgress()), cycleDays=getCycleTotalDays();
-  document.getElementById('projFill').style.width=income>0?Math.min(100,Math.round((projected/income)*100))+'%':'0%';
-  document.getElementById('projMarker').style.left=Math.min(100,Math.round((cycleDay/cycleDays)*100))+'%';
-  document.getElementById('projCurrent').textContent=fmt(expense);
-  document.getElementById('projEnd').textContent=fmt(projected);
-  document.getElementById('txPageSub').textContent=state.transactions.length+' transacties in totaal';
-  renderMonthComparison();
-  renderMobileHero();
+  /* ── De cyclus tot nu toe ── */
+  renderCashflowChart();
+
+  /* ── Coach + HUD ── */
   renderCoach();
-  if (typeof renderDashMission === 'function') renderDashMission();
+  if (typeof renderHUD === 'function') renderHUD();
+
+  const txSub = document.getElementById('txPageSub');
+  if (txSub) txSub.textContent = state.transactions.length + ' transacties in totaal';
 }
 
-/* ═══════════════════════════════════════════════
-   CHARTS HELPERS
-   ═══════════════════════════════════════════════ */
-/* Grafiekkleuren komen uit de tokens, zodat licht en donker
-   automatisch meelopen met het palet. */
+/* De missie als "volgende zet" op het speelbord */
+function renderBoardQuest() {
+  const el = document.getElementById('boardQuestInner');
+  if (!el) return;
+
+  if (typeof ensureMission !== 'function' || !state.adventure) {
+    el.innerHTML = '<div class="empty-state">—</div>';
+    return;
+  }
+
+  ensureMission();
+  const m = state.adventure.currentMission;
+  const tpl = m ? MISSIONS.find(x => x.id === m.id) : null;
+  if (!tpl) { el.innerHTML = '<div class="empty-state">—</div>'; return; }
+
+  const res  = tpl.check(m);
+  const days = Math.max(0, Math.ceil((new Date(m.weekEnd + 'T23:59:59') - new Date()) / 86400000));
+  const path = getPathInfo();
+
+  el.innerHTML = `
+    <div class="board-quest-eyebrow">Je volgende zet</div>
+    <div class="board-quest-icon">${tpl.icon}</div>
+    <div class="board-quest-name">${tpl.name}</div>
+    <div class="board-quest-desc">${tpl.describe(m)}</div>
+
+    <div class="board-quest-state ${res.success ? 'good' : 'bad'}">
+      ${res.success ? '✓' : '○'} ${res.progress}
+    </div>
+
+    <div class="board-quest-pips">
+      ${Array.from({length: path.stepsNeeded}, (_, i) =>
+        `<span class="adv-step-dot ${i < path.stepsDone ? 'filled' : ''}"></span>`).join('')}
+    </div>
+
+    <div class="board-quest-foot">
+      <span>${path.current.icon} ${path.current.name}</span>
+      <span>${days === 0 ? 'laatste dag' : `nog ${days}d`}</span>
+    </div>`;
+}
+
+/* Categorieën op het dashboard — compact, gesorteerd, met balkjes */
+function renderDashCategories(cats, total) {
+  const el   = document.getElementById('dashCatList');
+  const meta = document.getElementById('catStripMeta');
+  if (!el) return;
+
+  const sorted = Object.entries(cats).sort((a,b) => b[1] - a[1]);
+  if (meta) meta.textContent = total > 0 ? fmt(total) + ' deze cyclus' : '';
+
+  if (!sorted.length) {
+    el.innerHTML = '<div class="empty-state">Nog geen uitgaven deze cyclus.</div>';
+    renderDonutChart(cats);
+    return;
+  }
+
+  el.innerHTML = sorted.map(([cat, amt]) => {
+    const pct = total > 0 ? Math.round((amt / total) * 100) : 0;
+    const col = catColor(cat);
+    return `<div class="cat-breakdown-row">
+      <span class="cat-breakdown-dot" style="background:${col}"></span>
+      <span class="cat-breakdown-name">${catEmoji(cat)} ${cat}</span>
+      <div class="cat-breakdown-bar-wrap">
+        <div class="cat-breakdown-bar" style="width:${pct}%;background:${col}"></div>
+      </div>
+      <span class="cat-breakdown-amt">${fmt(amt)}</span>
+      <span class="cat-breakdown-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  renderDonutChart(cats);
+}
+
 function chartColors(){
   const light = state.settings.theme === 'light';
   return {
@@ -1516,7 +1549,7 @@ function renderDonutChart(cats){
   const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   const total=entries.reduce((a,[,v])=>a+v,0);
   document.getElementById('donutTotal').textContent=fmt(total);
-  const ctx=document.getElementById('donutChart').getContext('2d');
+  const ctx=document.getElementById('categoryChart').getContext('2d');
   if(charts.donut)charts.donut.destroy();
   if(!entries.length){document.getElementById('donutLegend').innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center">Geen uitgaven</div>';return;}
   charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map(([k])=>catColor(k)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#16122E',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
@@ -2490,39 +2523,6 @@ function getMonthTx(monthPrefix) {
   return state.transactions.filter(t=>t.date.startsWith(monthPrefix));
 }
 
-function renderMonthComparison() {
-  const el = document.getElementById('monthCompare');
-  if (!el) return;
-
-  const cycles = getLastNCycles(2); // [vorige cyclus, huidige cyclus]
-  const [prevCycle, thisCycle] = cycles;
-
-  const thisExp  = state.transactions.filter(t=>t.type==='expense'&&thisCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-  const prevExp  = state.transactions.filter(t=>t.type==='expense'&&prevCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-  const thisInc  = state.transactions.filter(t=>t.type==='income'&&thisCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-  const prevInc  = state.transactions.filter(t=>t.type==='income'&&prevCycle.match(t)).reduce((a,t)=>a+t.amt,0);
-
-  const expDiff = thisExp - prevExp;
-  const incDiff = thisInc - prevInc;
-  const prevName = prevCycle.label;
-  const thisName = thisCycle.label;
-
-  el.innerHTML = `
-    <div class="compare-row">
-      <span class="compare-label">Uitgaven</span>
-      <span class="compare-prev">${fmt(prevExp)}<span class="compare-month">${prevName}</span></span>
-      <span class="compare-arrow ${expDiff>0?'worse':'better'}">${expDiff>0?'↑':'↓'}</span>
-      <span class="compare-now">${fmt(thisExp)}<span class="compare-month">${thisName}</span></span>
-      <span class="compare-delta" style="color:${expDiff>0?'var(--red)':'var(--green)'}">${expDiff>0?'+':''}${fmt(expDiff)}</span>
-    </div>
-    <div class="compare-row">
-      <span class="compare-label">Inkomsten</span>
-      <span class="compare-prev">${fmt(prevInc)}<span class="compare-month">${prevName}</span></span>
-      <span class="compare-arrow ${incDiff>=0?'better':'worse'}">${incDiff>=0?'↑':'↓'}</span>
-      <span class="compare-now">${fmt(thisInc)}<span class="compare-month">${thisName}</span></span>
-      <span class="compare-delta" style="color:${incDiff>=0?'var(--green)':'var(--red)'}">${incDiff>=0?'+':''}${fmt(incDiff)}</span>
-    </div>`;
-}
 
 
 
