@@ -299,10 +299,18 @@
       <div class="tx-summary" id="txSummary"></div>
     </section>
 
-    <!-- ══════════════ ANALYTICS ══════════════ -->
+    <!-- ══════════════ ANALYTICS — DE KRONIEK ══════════════
+         Het dashboard vertelt waar je NU staat.
+         Deze pagina vertelt hoe je BEWEEGT — en wat je eraan kunt doen.
+         Zes vragen, in volgorde. Niets dat het dashboard al zegt.
+    ═══════════════════════════════════════════════════════════ -->
     <section class="page" id="page-analytics">
       <div class="page-header">
-        <div><span class="page-eyebrow">De kroniek</span><h1 class="page-title">Analytics</h1><p class="page-sub" id="analyticsSub">Diepgaand inzicht in je financiën</p></div>
+        <div>
+          <span class="page-eyebrow">De kroniek</span>
+          <h1 class="page-title">Analytics</h1>
+          <p class="page-sub" id="analyticsSub">Diepgaand inzicht in je financiën</p>
+        </div>
         <div class="period-switcher">
           <button class="pill active" onclick="setPeriod('month',this)">Maand</button>
           <button class="pill" onclick="setPeriod('quarter',this)">Kwartaal</button>
@@ -310,7 +318,7 @@
         </div>
       </div>
 
-      <!-- VERHAAL — wat gebeurt er met je geld? -->
+      <!-- ═══ 1. HET VERHAAL — de held van de pagina ═══ -->
       <div class="card money-story-card" id="moneyStoryCard">
         <div class="money-story-header">
           <span class="money-story-icon">💬</span>
@@ -320,68 +328,84 @@
         <div class="money-flow-bars" id="moneyFlowBars"></div>
       </div>
 
-      <!-- COACH — slimme observaties & bespaartips -->
-      <div class="card coach-card" id="coachCard">
-        <div class="coach-header">
-          <span class="coach-icon">🧠</span>
-          <span class="card-title">Je geldcoach</span>
-        </div>
+      <!-- ═══ 2. WAT JE COACH ZIET ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Wat je coach ziet</h2>
+        <span class="strip-meta">op basis van je eigen cijfers</span>
+      </section>
+
+      <div class="card coach-card">
         <div id="coachTips" class="coach-tips"></div>
       </div>
 
-      <!-- CATEGORIE VERDELING — waar gaat het naartoe -->
-      <div class="analytics-grid" style="margin-bottom:14px">
-        <div class="card analytics-card-wide">
-          <div class="card-header">
-            <span class="card-title">Waar gaat je geld naartoe?</span>
-            <span class="card-sub" id="catBreakdownSub"></span>
+      <!-- ═══ 3. LOOPT HET OP OF AF? ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Loopt het op of af?</h2>
+        <div id="incExpLegend" class="chart-legend"></div>
+      </section>
+
+      <div class="card chart-card">
+        <div class="chart-wrap" style="height:250px">
+          <canvas id="incExpChart"></canvas>
+        </div>
+      </div>
+
+      <!-- ═══ 4. WAAR SLUIPT HET IN? ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Waar sluipt het in?</h2>
+        <span class="strip-meta">je vier grootste posten over tijd</span>
+      </section>
+
+      <div class="split">
+        <div class="card chart-card">
+          <div class="chart-wrap" style="height:220px">
+            <canvas id="catTrendChart"></canvas>
           </div>
-          <div id="catBreakdownList" class="cat-breakdown-list"></div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Vaste vs variabele lasten</span></div>
-          <div class="chart-wrap" style="height:200px"><canvas id="fixedVarChart"></canvas></div>
-          <div id="fixedVarLegend" style="margin-top:10px"></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title">Deze cyclus vs vorige</span></div>
-          <div id="cycleCompareList" class="cat-breakdown-list"></div>
+          <div class="card-header">
+            <span class="card-title">Vast vs vrij</span>
+          </div>
+          <div class="chart-wrap" style="height:170px">
+            <canvas id="fixedVarChart"></canvas>
+          </div>
+          <div id="fixedVarLegend" style="margin-top:12px"></div>
         </div>
       </div>
 
-      <!-- TRENDS -->
-      <div class="analytics-grid">
-        <div class="card analytics-card-wide">
-          <div class="card-header"><span class="card-title">Inkomsten vs Uitgaven</span><div id="incExpLegend" class="chart-legend"></div></div>
-          <div class="chart-wrap" style="height:220px"><canvas id="incExpChart"></canvas></div>
+      <!-- ═══ 5. JE GEWOONTES ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Je gewoontes</h2>
+        <span class="strip-meta">patronen die je zelf niet ziet</span>
+      </section>
+
+      <div class="split">
+        <div class="card chart-card">
+          <div class="card-header">
+            <span class="card-title">Op welke dag geef je uit?</span>
+          </div>
+          <div class="chart-wrap" style="height:190px">
+            <canvas id="weekdayChart"></canvas>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title">Categorie trend</span></div>
-          <div class="chart-wrap" style="height:200px"><canvas id="catTrendChart"></canvas></div>
-        </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title">Spaarquote per cyclus</span></div>
-          <div class="chart-wrap" style="height:200px"><canvas id="savingsRateChart"></canvas></div>
-        </div>
-        <div class="card analytics-card-wide">
-          <div class="card-header"><span class="card-title">Uitgavenpatroon per weekdag</span></div>
-          <div class="chart-wrap" style="height:180px"><canvas id="weekdayChart"></canvas></div>
+        <div class="card chart-card">
+          <div class="card-header">
+            <span class="card-title">Hoeveel hou je over?</span>
+          </div>
+          <div class="chart-wrap" style="height:190px">
+            <canvas id="savingsRateChart"></canvas>
+          </div>
         </div>
       </div>
 
-      <!-- JAAROVERZICHT -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-header">
-          <span class="card-title">📅 Jaaroverzicht</span>
-          <select class="filter-select" id="yearReportSelect" onchange="renderYearReport()" style="width:auto"></select>
-        </div>
+      <!-- ═══ 6. HET JAAR ═══ -->
+      <section class="strip">
+        <h2 class="strip-title">Het jaar in cijfers</h2>
+        <select class="filter-select" id="yearReportSelect" onchange="renderYearReport()" style="width:auto"></select>
+      </section>
+
+      <div class="card">
         <div id="yearReport"></div>
-      </div>
-
-      <!-- INZICHTEN -->
-      <div class="card insights-card">
-        <div class="card-header"><span class="card-title">Automatische inzichten</span></div>
-        <div class="insights-grid" id="insightsGrid"></div>
       </div>
     </section>
 
