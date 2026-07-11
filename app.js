@@ -689,7 +689,24 @@ function renderSavings() {
 
   if (totalEl) totalEl.textContent = fmt(totalBal);
   if (totalTarget) totalTarget.textContent = totalTgt>0 ? 'van '+fmt(totalTgt)+' doel' : 'totaal spaarsaldo';
-  if (totalPct) totalPct.textContent = overallPct!==null ? overallPct+'%' : '—';
+
+  // Zonder doelbedrag is een percentage betekenisloos — nodig dan uit
+  // om er een te stellen i.p.v. een streepje te tonen.
+  if (totalPct) {
+    if (overallPct !== null) {
+      totalPct.textContent = overallPct + '%';
+      totalPct.style.fontSize = '';
+      totalPct.style.color = '';
+      const sub = totalPct.nextElementSibling;
+      if (sub) sub.textContent = 'van totaal doelbedrag';
+    } else {
+      totalPct.textContent = 'Stel een doel';
+      totalPct.style.fontSize = '15px';
+      totalPct.style.color = 'var(--text3)';
+      const sub = totalPct.nextElementSibling;
+      if (sub) sub.textContent = 'geef je spaarpot een bestemming';
+    }
+  }
 
   // Render savings chart
   renderSavingsChart(accs);
@@ -732,7 +749,7 @@ function renderSavings() {
         }
         <div class="savings-acc-month">
           <span>Deze maand:</span>
-          <span style="color:${monthNet>=0?'var(--green)':'var(--red)'};font-weight:600">${monthNet>=0?'+':''}${fmt(monthNet)}</span>
+          <span style="color:${monthNet>=0?'var(--green)':'var(--red)'};font-weight:600">${monthNet===0?fmt(0):fmtSigned(monthNet)}</span>
         </div>
       </div>`;
     }).join('');
@@ -1553,7 +1570,7 @@ function renderDonutChart(cats){
   document.getElementById('donutTotal').textContent=fmt(total);
   const ctx=document.getElementById('categoryChart').getContext('2d');
   if(charts.donut)charts.donut.destroy();
-  if(!entries.length){document.getElementById('donutLegend').innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center">Geen uitgaven</div>';return;}
+  if(!entries.length){ if(charts.donut) charts.donut.destroy(); return; }
   charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map(([k])=>catColor(k)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#16122E',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
   document.getElementById('donutLegend').innerHTML=entries.slice(0,6).map(([k,v])=>`<div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:${catColor(k)}"></span>${k}</span><span class="donut-leg-amt">${fmt(v)}</span></div>`).join('');
 }
