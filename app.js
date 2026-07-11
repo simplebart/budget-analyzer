@@ -209,6 +209,7 @@ function navigate(page) {
   document.querySelectorAll(`[data-page="${page}"]`).forEach(el=>el.classList.add('active'));
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page]||page;
   if (typeof renderHUD === 'function') renderHUD();
+  if (typeof renderPlayer === 'function') renderPlayer();
   // Show/hide topbar action button based on page
   const actionBtn = document.getElementById('topbarAction');
   if (actionBtn) {
@@ -1442,6 +1443,7 @@ function renderDashboard(){
   /* ── Coach + HUD ── */
   renderCoach();
   if (typeof renderHUD === 'function') renderHUD();
+  if (typeof renderPlayer === 'function') renderPlayer();
 
   const txSub = document.getElementById('txPageSub');
   if (txSub) txSub.textContent = state.transactions.length + ' transacties in totaal';
@@ -1986,11 +1988,13 @@ function renderBudgets(){
   grid.innerHTML=entries.map(([cat,limit])=>{
     const spent=tx.filter(t=>t.type==='expense'&&t.cat===cat).reduce((a,t)=>a+t.amt,0);
     const pct=Math.min(100,Math.round((spent/limit)*100));
+    const rawPct=(spent/limit)*100;
+    const stateCls = rawPct >= 100 ? 'over' : rawPct >= 80 ? 'close' : 'safe';
     const over=spent>limit,warn=pct>=80&&!over;
     const col=catColor(cat);
     const barCol=over?'var(--red)':warn?'var(--amber)':col;
     const rem=limit-spent;
-    return `<div class="budget-card"><div class="budget-card-header"><div class="budget-cat-name"><span class="budget-cat-dot" style="background:${col}"></span>${catEmoji(cat)} ${cat}</div><div style="display:flex;gap:8px;align-items:center"><span class="budget-pct-badge ${over?'over':warn?'warn':'ok'}">${pct}%</span><button class="budget-del-btn" onclick="deleteBudget('${cat}')">×</button></div></div><div class="budget-spent">${fmt(spent)}</div><div class="budget-amounts"><span>van ${fmt(limit)} budget</span><span style="color:${over?'var(--red)':rem<limit*0.2?'var(--amber)':'var(--green)'}">${over?'−'+fmt(Math.abs(rem))+' over':fmt(rem)+' resterend'}</span></div><div class="budget-bar-track"><div class="budget-bar-fill" style="width:${pct}%;background:${barCol}"></div></div></div>`;
+    return `<div class="budget-card ${stateCls}"><div class="budget-card-header"><div class="budget-cat-name"><span class="budget-cat-dot" style="background:${col}"></span>${catEmoji(cat)} ${cat}</div><div style="display:flex;gap:8px;align-items:center"><span class="budget-pct-badge ${over?'over':warn?'warn':'ok'}">${pct}%</span><button class="budget-del-btn" onclick="deleteBudget('${cat}')">×</button></div></div><div class="budget-spent">${fmt(spent)}</div><div class="budget-amounts"><span>van ${fmt(limit)} budget</span><span style="color:${over?'var(--red)':rem<limit*0.2?'var(--amber)':'var(--green)'}">${over?'−'+fmt(Math.abs(rem))+' over':fmt(rem)+' resterend'}</span></div><div class="budget-bar-track"><div class="budget-bar-fill" style="width:${pct}%;background:${barCol}"></div></div></div>`;
   }).join('');
 }
 
@@ -2829,6 +2833,7 @@ async function init(){
   if (typeof ensureMission === 'function') {
     ensureMission();
     if (typeof renderHUD === 'function') renderHUD();
+  if (typeof renderPlayer === 'function') renderPlayer();
     if (typeof checkCycleReport === 'function') checkCycleReport();
   }
 
