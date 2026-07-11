@@ -2877,327 +2877,661 @@ body.app-locked .pin-screen {
   font-weight: 600;
 }
 
+
 /* ═══════════════════════════════════════════════
-   GAMIFICATION — levels, badges, records, challenges
+   HET AVONTUUR
    ═══════════════════════════════════════════════ */
+.adv-card { margin-bottom: 14px; }
+
+.adv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.adv-col { display: flex; flex-direction: column; }
 
 /* ── LEVEL ── */
-.level-header {
+.adv-level-top {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
-.level-icon {
-  font-size: 36px;
-  width: 60px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg3);
+.adv-level-icon {
+  font-size: 34px;
+  width: 58px; height: 58px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(145deg, var(--bg3), rgba(108,138,255,0.1));
+  border: 1px solid var(--border-strong);
   border-radius: 16px;
   flex-shrink: 0;
 }
 
-.level-name {
+.adv-level-title {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;
 }
 
-.level-score {
-  font-size: 13px;
+.adv-level-num {
+  font-size: 12px;
   color: var(--text3);
   margin-top: 2px;
 }
 
-.level-progress-track {
+.adv-level-xp {
+  margin-left: auto;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.adv-xp-track {
   height: 8px;
   background: var(--border);
   border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.level-progress-fill {
+.adv-xp-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), var(--green));
   border-radius: 4px;
-  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.level-progress-label {
-  font-size: 12px;
+.adv-xp-label {
+  font-size: 11px;
+  color: var(--text3);
+}
+
+/* ── MISSIE ── */
+.adv-mission-card {
+  background: var(--bg3);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.adv-mission-card.on-track {
+  border-color: var(--green);
+  background: linear-gradient(145deg, var(--bg3), rgba(52,212,138,0.06));
+}
+
+.adv-mission-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.adv-mission-icon { font-size: 28px; }
+
+.adv-mission-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.adv-mission-tier {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 1px;
+}
+
+.adv-mission-desc {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 12px;
+  background: rgba(255,255,255,0.02);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.adv-mission-status {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.adv-mission-status.good {
+  color: var(--green);
+  background: rgba(52,212,138,0.1);
+}
+
+.adv-mission-status.bad {
+  color: var(--amber);
+  background: rgba(255,179,64,0.1);
+}
+
+.adv-mission-stakes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.stake.win  { color: var(--green); }
+.stake.lose { color: var(--red); opacity: 0.75; }
+
+/* ── HET PAD ── */
+.adv-path-wrap {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.adv-path {
+  position: relative;
+  padding-left: 4px;
+}
+
+.adv-path-stop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  position: relative;
+}
+
+/* Verbindingslijn */
+.adv-path-stop::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.adv-path-stop:first-child::before { top: 50%; }
+.adv-path-stop:last-child::before  { bottom: 50%; }
+
+.adv-path-stop.past::before,
+.adv-path-stop.current::before {
+  background: var(--accent);
+}
+
+.adv-path-marker {
+  position: relative;
+  z-index: 1;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border: 2px solid var(--border);
+  font-size: 15px;
+}
+
+.adv-path-stop.past .adv-path-marker {
+  border-color: var(--accent);
+  background: rgba(108,138,255,0.15);
+}
+
+.adv-path-stop.current .adv-path-marker {
+  border-color: var(--green);
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(52,212,138,0.2);
+  transform: scale(1.15);
+}
+
+.adv-path-stop.future .adv-path-marker {
+  opacity: 0.35;
+}
+
+.adv-path-icon { line-height: 1; }
+
+.adv-path-name {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text2);
 }
 
-.level-progress-label strong { color: var(--text); }
-
-.level-max {
-  text-align: center;
-  font-size: 14px;
-  color: var(--green);
-  font-weight: 600;
-  padding: 8px;
-}
-
-/* ── BADGES ── */
-.badge-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 10px;
-}
-
-.badge-item {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 10px;
-  text-align: center;
-  transition: transform 0.15s, border-color 0.15s;
-}
-
-.badge-item.unlocked {
-  border-color: var(--accent);
-  background: linear-gradient(145deg, var(--bg3), rgba(108,138,255,0.06));
-}
-
-.badge-item.unlocked:hover {
-  transform: translateY(-2px);
-  border-color: var(--green);
-}
-
-.badge-item.locked { opacity: 0.4; }
-
-.badge-icon {
-  font-size: 28px;
-  margin-bottom: 6px;
-  line-height: 1;
-}
-
-.badge-name {
-  font-size: 12px;
-  font-weight: 600;
+.adv-path-stop.current .adv-path-name {
   color: var(--text);
+  font-size: 15px;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.adv-path-stop.past .adv-path-name { color: var(--text2); }
+.adv-path-stop.future .adv-path-name { color: var(--text3); opacity: 0.6; }
+
+.adv-path-desc {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.adv-path-you {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+  background: rgba(52,212,138,0.15);
+  padding: 3px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── DE STAD ── */
+.adv-city { text-align: center; padding: 8px 0; }
+
+.adv-city-emoji {
+  font-size: 56px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.adv-city-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.adv-city-desc {
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 12px;
+}
+
+.adv-city-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text2);
+  margin-bottom: 12px;
+}
+
+.adv-city-note {
+  font-size: 11px;
+  color: var(--green);
+  background: rgba(52,212,138,0.08);
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* ── STATS ── */
+.adv-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.adv-stat {
+  background: var(--bg3);
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.adv-stat-val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.adv-stat-lbl {
+  font-size: 10px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── GESCHIEDENIS ── */
+.adv-hist-list { display: flex; flex-direction: column; }
+
+.adv-hist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.adv-hist-row:last-child { border-bottom: none; }
+
+.adv-hist-icon { font-size: 15px; }
+.adv-hist-name { flex: 1; color: var(--text); font-weight: 500; }
+.adv-hist-week { color: var(--text3); font-size: 11px; }
+
+.adv-hist-xp {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* ── DASHBOARD MISSIE-WIDGET ── */
+.adv-mission-widget {
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+  border-left: 3px solid var(--accent);
+}
+
+.adv-mission-widget:hover {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}
+
+.dash-mis-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.dash-mis-icon { font-size: 26px; flex-shrink: 0; }
+
+.dash-mis-body { flex: 1; min-width: 0; }
+
+.dash-mis-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 600;
   margin-bottom: 3px;
 }
 
-.badge-desc {
-  font-size: 10px;
-  color: var(--text3);
+.dash-mis-desc {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
   line-height: 1.4;
 }
 
-/* ── BADGE UNLOCK CELEBRATION ── */
-.badge-unlock-overlay {
+.dash-mis-arrow {
+  color: var(--text3);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.dash-mis-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.dash-mis-status.good { color: var(--green); font-weight: 600; }
+.dash-mis-status.bad  { color: var(--amber); font-weight: 600; }
+
+.dash-mis-lvl {
+  color: var(--text3);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+}
+
+/* ── OVERLAYS: missie-resultaat & cyclusrapport ── */
+.adv-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(10px);
   z-index: 12000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
   animation: fadeIn 0.3s ease;
+  overflow-y: auto;
 }
 
-.badge-unlock-card {
+.adv-result-card {
   position: relative;
   background: var(--bg2);
-  border: 1px solid var(--accent);
   border-radius: 24px;
-  padding: 36px 32px;
+  padding: 36px 30px 28px;
   text-align: center;
-  max-width: 320px;
+  max-width: 340px;
   width: 100%;
   animation: badgePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
   overflow: hidden;
 }
 
-.badge-unlock-glow {
+.adv-result-card.win  { border: 1px solid var(--green); }
+.adv-result-card.lose { border: 1px solid var(--red); }
+
+.adv-result-glow {
   position: absolute;
-  top: -50%; left: 50%;
+  top: -60%; left: 50%;
   transform: translateX(-50%);
-  width: 200px; height: 200px;
-  background: radial-gradient(circle, rgba(108,138,255,0.3) 0%, transparent 70%);
+  width: 240px; height: 240px;
   pointer-events: none;
 }
 
-.badge-unlock-icon {
-  font-size: 64px;
-  margin-bottom: 12px;
+.adv-result-card.win .adv-result-glow {
+  background: radial-gradient(circle, rgba(52,212,138,0.25) 0%, transparent 70%);
+}
+
+.adv-result-card.lose .adv-result-glow {
+  background: radial-gradient(circle, rgba(255,94,108,0.2) 0%, transparent 70%);
+}
+
+.adv-result-icon {
+  font-size: 56px;
+  margin-bottom: 10px;
   animation: badgeBounce 0.6s ease 0.2s;
 }
 
-.badge-unlock-label {
+.adv-result-label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 6px;
 }
 
-.badge-unlock-name {
+.adv-result-card.win .adv-result-label  { color: var(--green); }
+.adv-result-card.lose .adv-result-label { color: var(--red); }
+
+.adv-result-name {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 6px;
 }
 
-.badge-unlock-desc {
+.adv-result-progress {
   font-size: 13px;
   color: var(--text2);
+  margin-bottom: 20px;
+}
+
+.adv-result-rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 22px;
 }
 
-@keyframes badgePop {
-  0%   { transform: scale(0.7); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes badgeBounce {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.15); }
-}
-
-/* ── RECORDS ── */
-.records-list {
+.adv-reward {
+  background: var(--bg3);
+  border-radius: 10px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.record-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
+.adv-reward-val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
 }
 
-.record-row:last-child { border-bottom: none; }
+.adv-reward-lbl {
+  font-size: 11px;
+  color: var(--text3);
+}
 
-.record-icon { font-size: 18px; flex-shrink: 0; }
+/* ── CYCLUSRAPPORT ── */
+.adv-report-card {
+  background: var(--bg2);
+  border: 1px solid var(--border-strong);
+  border-radius: 24px;
+  padding: 28px 24px;
+  max-width: 420px;
+  width: 100%;
+  animation: badgePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-height: 90vh;
+  overflow-y: auto;
+}
 
-.record-label { flex: 1; color: var(--text2); }
+.adv-report-header { text-align: center; margin-bottom: 20px; }
 
-.record-value {
+.adv-report-title {
   font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
 
-/* ── CHALLENGES ── */
-.challenge-intro {
+.adv-report-sub {
   font-size: 13px;
-  color: var(--text2);
-  margin-bottom: 12px;
+  color: var(--text3);
+  margin-top: 4px;
 }
 
-.challenge-picker {
+.adv-report-money {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-bottom: 20px;
 }
 
-.challenge-option {
+.adv-money-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px;
+  padding: 10px 12px;
   background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, transform 0.1s;
-  text-align: left;
-  font-family: 'Inter', sans-serif;
+  border-radius: 10px;
 }
 
-.challenge-option:hover {
-  border-color: var(--accent);
-  transform: translateX(2px);
-}
+.adv-money-lbl { font-size: 13px; color: var(--text2); }
 
-.challenge-opt-icon { font-size: 22px; flex-shrink: 0; }
-
-.challenge-opt-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.challenge-opt-desc {
-  font-size: 12px;
-  color: var(--text3);
-  margin-top: 2px;
-}
-
-.challenge-opt-arrow {
-  margin-left: auto;
-  color: var(--text3);
-  font-size: 16px;
-}
-
-.challenge-active {
-  background: var(--bg3);
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.challenge-active.success {
-  border-color: var(--green);
-  background: linear-gradient(145deg, var(--bg3), rgba(52,212,138,0.08));
-}
-
-.challenge-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.challenge-icon { font-size: 26px; }
-
-.challenge-name {
+.adv-money-val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
   font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
 }
 
-.challenge-status {
+.adv-report-section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text3);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.adv-report-missions { margin-bottom: 20px; }
+
+.adv-mission-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.adv-mission-row.win  { background: rgba(52,212,138,0.08); }
+.adv-mission-row.lose { background: rgba(255,94,108,0.08); }
+
+.adv-mission-row .adv-mission-name { flex: 1; color: var(--text); }
+
+.adv-mission-result {
+  font-size: 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.adv-report-summary {
+  text-align: center;
   font-size: 12px;
   color: var(--text2);
-  margin-top: 2px;
-}
-
-.challenge-head button { margin-left: auto; }
-
-.challenge-done {
-  margin-top: 12px;
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--border);
-  font-size: 13px;
-  color: var(--green);
-  font-weight: 600;
+  margin-top: 8px;
 }
 
-.btn-sm { padding: 6px 12px; font-size: 12px; }
+.adv-report-status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.adv-status-item {
+  background: var(--bg3);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.adv-status-icon { font-size: 26px; line-height: 1; }
+
+.adv-status-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.adv-status-lbl {
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.adv-overlay .btn-primary { width: 100%; }
+
+/* ── MOBIEL ── */
+@media (max-width: 900px) {
+  .adv-grid { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 600px) {
-  .badge-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
-  .badge-icon { font-size: 24px; }
-  .badge-name { font-size: 11px; }
-  .badge-desc { font-size: 9px; }
-  .level-icon { width: 50px; height: 50px; font-size: 28px; }
-  .level-name { font-size: 16px; }
+  .adv-level-icon { width: 48px; height: 48px; font-size: 26px; }
+  .adv-level-title { font-size: 17px; }
+  .adv-path-wrap { max-height: 320px; }
+  .adv-city-emoji { font-size: 46px; }
+  .adv-report-status { grid-template-columns: 1fr; }
+  .adv-status-item { flex-direction: row; justify-content: flex-start; text-align: left; gap: 12px; }
+  .adv-mission-stakes { font-size: 10px; }
 }
