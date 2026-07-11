@@ -24,7 +24,8 @@ let state = {
     { name:'Overig',         emoji:'📦', color:'#8B84AC', deletable:false },
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1,
-              checkingName:'', openingBalance:null, openingDate:'', keepTarget:0 },
+              checkingName:'', openingBalance:null, openingDate:'', keepTarget:0,
+              budgetRhythm:'day', loggedThrough:'' },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
   adventure: {
     xp: 0,                    // totale ervaring, bepaalt level 1-100
@@ -417,6 +418,10 @@ function saveTx() {
   } else {
     state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount });
   }
+
+  /* Je logt nu, dus je bent bij tot vandaag. Dat sluit het gat
+     zonder dat je er apart op hoeft te klikken. */
+  state.settings.loggedThrough = today();
 
   saveState();
   closeModal();
@@ -1141,6 +1146,16 @@ function saveOpeningBalance() {
   showToast('Beginsaldo opgeslagen. Je saldo wordt nu doorgerekend.', 'success');
 }
 
+function saveRhythm(r) {
+  state.settings.budgetRhythm = r;
+  saveState();
+  renderSettings();
+  renderDashboard();
+  showToast(r === 'week'
+    ? 'Weekbudget — werk één keer per week bij.'
+    : 'Dagbudget — het scherpst als je dagelijks logt.', 'success');
+}
+
 function saveKeepTarget() {
   const v = parseFloat(document.getElementById('keepTargetInput').value);
   state.settings.keepTarget = isNaN(v) || v < 0 ? 0 : v;
@@ -1317,6 +1332,72 @@ function getCurrentMonthTx() {
 }
 
 
+
+/* ═══════════════════════════════════════════════════════════
+   BIJGEWERKT TOT — het verschil tussen "niks uitgegeven"
+   en "vergeten te loggen"
+
+   Een lege dag ziet er in de data hetzelfde uit als een dag die je
+   niet hebt bijgewerkt. De app kan dat niet weten, dus vraagt hij
+   het. Pas als je bevestigt schuift 'loggedThrough' op, en pas dan
+   mag het dagbudget die dagen als écht-niks-uitgegeven meetellen.
+   ═══════════════════════════════════════════════════════════ */
+function loggedThroughDate() {
+  const s = state.settings.loggedThrough;
+  if (s) return s;
+  // Nooit bevestigd? Val terug op je laatste transactie.
+  const laatste = state.transactions
+    .map(t => t.date)
+    .sort()
+    .pop();
+  return laatste || today();
+}
+
+/* Hoeveel dagen liggen er tussen 'bijgewerkt tot' en gisteren? */
+function loggingGap() {
+  const door = loggedThroughDate();
+  const nu   = today();
+  if (door >= nu) return null;
+
+  const d1 = new Date(door + 'T12:00:00');
+  const d2 = new Date(nu   + 'T12:00:00');
+  const dagen = Math.round((d2 - d1) / 86400000) - 1;   // gisteren is de laatste
+  if (dagen <= 0) return null;
+
+  const van = new Date(d1); van.setDate(van.getDate() + 1);
+  const tot = new Date(d2); tot.setDate(tot.getDate() - 1);
+
+  // Is er in dat gat al iets geboekt? Dan heb je dus wél bijgewerkt.
+  const vanStr = dateToStr(van), totStr = dateToStr(tot);
+  const geboekt = state.transactions.filter(t => t.date >= vanStr && t.date <= totStr);
+
+  return {
+    dagen,
+    van: vanStr,
+    tot: totStr,
+    geboekt: geboekt.length,
+    bedrag: geboekt.filter(t => t.type === 'expense').reduce((a,t) => a + t.amt, 0),
+  };
+}
+
+/* "Ja, ik gaf die dagen niks uit" — de app mag ze meetellen */
+function confirmNoSpend() {
+  const gap = loggingGap();
+  state.settings.loggedThrough = today();
+  saveState();
+  renderDashboard();
+  if (gap) {
+    showToast(`${gap.dagen} ${gap.dagen === 1 ? 'dag' : 'dagen'} zonder uitgaven — je budget is bijgewerkt.`, 'success');
+  }
+}
+
+/* "Nee, ik vul ze nog aan" — laat het gat staan, maar onthoud dat je het weet */
+function dismissGap() {
+  state.settings.loggedThrough = today();
+  saveState();
+  renderDashboard();
+}
+
 /* ═══════════════════════════════════════════════════════════
    HET DAGBUDGET — wat kun je vandaag uitgeven?
 
@@ -1335,49 +1416,64 @@ function computeDailyAllowance() {
   const dayNow    = Math.max(1, Math.min(totalDays, getCycleDayProgress()));
   const daysLeft  = Math.max(1, totalDays - dayNow + 1);   // vandaag telt mee
 
+  const weekly = state.settings.budgetRhythm === 'week';
   const todayStr0 = today();
 
-  /* Wat je VANDAAG mag uitgeven, moet je berekenen vanaf wat je bij het
-     BEGIN van vandaag had — niet vanaf je saldo van dit moment. Anders
-     krimpt je dagbudget terwijl je de dag doorkomt, en telt wat je al
-     uitgaf dubbel mee. Dus: huidig saldo + wat je vandaag al uitgaf. */
-  const spentTodayNow = state.transactions
-    .filter(t => t.type === 'expense' && t.date === todayStr0)
+  /* Het budget van deze periode moet berekend worden vanaf wat je bij het
+     BEGIN ervan had — niet vanaf je saldo van dit moment. Anders krimpt je
+     budget terwijl de periode loopt, en telt wat je al uitgaf dubbel mee. */
+
+  // Grens van de huidige periode: vandaag, of het begin van deze week
+  let periodStart = todayStr0;
+  if (weekly) {
+    const now = new Date();
+    const dow = (now.getDay() + 6) % 7;             // ma = 0
+    const ma  = new Date(now); ma.setDate(ma.getDate() - dow);
+    const maStr = dateToStr(ma);
+    const cycleStartStr = dateToStr(start);
+    periodStart = maStr > cycleStartStr ? maStr : cycleStartStr;  // niet vóór de cyclus
+  }
+
+  const spentPeriod = state.transactions
+    .filter(t => t.type === 'expense' && t.date >= periodStart && t.date <= todayStr0)
     .reduce((a, t) => a + t.amt, 0);
 
   const bank = computeBankBalance();
   const { income, expense } = computeMetrics();
   const nu  = bank !== null ? bank : (income - expense);
-  const pot = nu + spentTodayNow;      // saldo zoals het vanochtend was
+  const pot = nu + spentPeriod;      // saldo zoals het bij aanvang van de periode was
 
   // Vaste lasten die deze cyclus nog moeten komen — die zijn al vergeven
-  const todayStr = todayStr0;
   let upcoming = 0;
   (state.recurring || []).filter(r => r.type === 'expense').forEach(r => {
     let d = new Date(start.getFullYear(), start.getMonth(), Math.min(r.day, 28));
     if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(r.day, 28));
     if (d > end) return;
     const ds = dateToStr(d);
-    if (ds <= todayStr) return;                       // al geweest
+    if (ds <= todayStr0) return;
     const alDeze = getCurrentMonthTx().some(t =>
       t.type === 'expense' && t.desc === r.desc && Math.abs(t.amt - r.amt) < 0.01);
     if (!alDeze) upcoming += r.amt;
   });
 
-  const keep      = Number(state.settings.keepTarget) || 0;
-  const vrij      = pot - upcoming - keep;
-  const perDag    = vrij / daysLeft;
+  const keep = Number(state.settings.keepTarget) || 0;
+  const vrij = pot - upcoming - keep;
 
-  const spentToday = spentTodayNow;
+  // Hoeveel periodes resten er nog?
+  const perioden = weekly ? Math.max(1, Math.ceil(daysLeft / 7)) : daysLeft;
+  const perPeriode = vrij / perioden;
 
   return {
-    perDag:      Math.round(perDag * 100) / 100,
-    restVandaag: Math.round((perDag - spentToday) * 100) / 100,
-    spentToday:  Math.round(spentToday * 100) / 100,
+    weekly,
+    perDag:      Math.round(perPeriode * 100) / 100,       // budget voor deze periode
+    restVandaag: Math.round((perPeriode - spentPeriod) * 100) / 100,
+    spentToday:  Math.round(spentPeriod * 100) / 100,
     daysLeft,
+    perioden,
     upcoming:    Math.round(upcoming * 100) / 100,
     keep,
     pot:         Math.round(pot * 100) / 100,
+    periodStart,
   };
 }
 
@@ -1772,16 +1868,49 @@ function renderDashboard(){
 }
 
 
-/* Het dagbudget op het speelbord */
+/* Het budget op het speelbord — per dag of per week, en eerlijk
+   over gaten in je administratie. */
 function renderToday() {
   const el = document.getElementById('today');
   if (!el) return;
 
-  const a = computeDailyAllowance();
+  const a   = computeDailyAllowance();
+  const gap = loggingGap();
 
-  // Zonder inkomsten valt er niets te verdelen
-  if (a.pot <= 0 && a.spentToday === 0) { el.innerHTML = ''; return; }
+  if (a.pot <= 0 && a.spentToday === 0 && !gap) { el.innerHTML = ''; return; }
 
+  /* ── Eerst het gat: een budget dat op verouderde data leunt is een
+        leugen, geen schatting. Dus vraag het, in plaats van te gokken. ── */
+  if (gap) {
+    const van = new Date(gap.van + 'T12:00:00');
+    const tot = new Date(gap.tot + 'T12:00:00');
+    const f = d => d.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+    const periode = gap.van === gap.tot ? f(van) : `${f(van)} – ${f(tot)}`;
+
+    el.innerHTML = `
+      <div class="gap">
+        <div class="gap-head">
+          <span class="gap-icon">🕳️</span>
+          <div>
+            <div class="gap-title">${gap.dagen} ${gap.dagen === 1 ? 'dag' : 'dagen'} niet bijgewerkt</div>
+            <div class="gap-sub">${periode}${gap.geboekt ? ` · ${gap.geboekt} transactie${gap.geboekt !== 1 ? 's' : ''} geboekt (${fmt(gap.bedrag)})` : ' · niets geboekt'}</div>
+          </div>
+        </div>
+        <div class="gap-body">
+          Zonder die dagen weet ik niet wat je te besteden hebt.
+          ${gap.geboekt ? 'Zijn ze compleet?' : 'Gaf je toen echt niets uit?'}
+        </div>
+        <div class="gap-actions">
+          <button class="btn-primary-sm" onclick="confirmNoSpend()">
+            ${gap.geboekt ? 'Ja, compleet' : 'Ja, niets uitgegeven'}
+          </button>
+          <button class="btn-secondary btn-sm" onclick="openModal('addTransaction')">Aanvullen</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  /* ── Geen gat: toon het budget ── */
   const over   = a.restVandaag;
   const opraak = over <= 0;
   const pct    = a.perDag > 0
@@ -1792,9 +1921,15 @@ function renderToday() {
               : pct > 70 ? 'var(--gold)'
               : 'var(--jade)';
 
+  const label = a.weekly ? 'Deze week te besteden' : 'Vandaag te besteden';
+  const uit   = a.weekly ? 'deze week al uit'      : 'vandaag al uit';
+  const rest  = a.weekly
+    ? `${a.perioden} ${a.perioden === 1 ? 'week' : 'weken'} te gaan`
+    : `${a.daysLeft} ${a.daysLeft === 1 ? 'dag' : 'dagen'} te gaan`;
+
   el.innerHTML = `
     <div class="today-top">
-      <span class="today-lbl">Vandaag te besteden</span>
+      <span class="today-lbl">${label}</span>
       <span class="today-amt" style="color:${kleur}">
         ${opraak ? '−' : ''}${fmt(Math.abs(over))}
       </span>
@@ -1805,9 +1940,9 @@ function renderToday() {
     </div>
 
     <div class="today-meta">
-      <span>${a.spentToday > 0 ? fmt(a.spentToday) + ' al uit' : 'nog niks uitgegeven'}
-            · dagbudget ${fmt(a.perDag)}</span>
-      <span>${a.upcoming > 0 ? fmt(a.upcoming) + ' vaste lasten gereserveerd' : ''}</span>
+      <span>${a.spentToday > 0 ? fmt(a.spentToday) + ' ' + uit : 'nog niets uitgegeven'}
+            · budget ${fmt(a.perDag)}</span>
+      <span>${a.upcoming > 0 ? fmt(a.upcoming) + ' vast · ' : ''}${rest}</span>
     </div>`;
 }
 
@@ -2467,6 +2602,12 @@ function renderSettings(){
   if (cn) cn.value = state.settings.checkingName || '';
   const kt = document.getElementById('keepTargetInput');
   if (kt) kt.value = state.settings.keepTarget || '';
+
+  const r = state.settings.budgetRhythm || 'day';
+  const rd = document.getElementById('rhythmDay');
+  const rw = document.getElementById('rhythmWeek');
+  if (rd) rd.classList.toggle('active', r === 'day');
+  if (rw) rw.classList.toggle('active', r === 'week');
   renderBankPreview();
   renderCatManageList();
   renderSyncSettings();
@@ -2636,7 +2777,9 @@ async function syncToSheets() {
       ['checkingName',   state.settings.checkingName || ''],
       ['openingBalance', state.settings.openingBalance ?? ''],
       ['openingDate',    state.settings.openingDate || ''],
-      ['keepTarget',     state.settings.keepTarget || 0]
+      ['keepTarget',     state.settings.keepTarget || 0],
+      ['budgetRhythm',   state.settings.budgetRhythm || 'day'],
+      ['loggedThrough',  state.settings.loggedThrough || '']
     ]);
 
     // Avontuur: level, pad, stad, missie — als JSON zodat het compact blijft
@@ -2764,6 +2907,8 @@ async function syncFromSheets() {
         if (r[0]==='checkingName')  state.settings.checkingName  = r[1]||'';
         if (r[0]==='openingDate')   state.settings.openingDate   = r[1]||'';
         if (r[0]==='keepTarget')    state.settings.keepTarget    = parseFloat(r[1])||0;
+        if (r[0]==='budgetRhythm')  state.settings.budgetRhythm  = r[1]||'day';
+        if (r[0]==='loggedThrough') state.settings.loggedThrough = r[1]||'';
         if (r[0]==='openingBalance')
           state.settings.openingBalance = (r[1]==='' || r[1]==null) ? null : parseFloat(r[1]);
       });
