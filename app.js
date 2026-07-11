@@ -1468,6 +1468,49 @@ function generateCoachTips() {
   const doubles = Object.entries(descCounts).filter(([k,c])=>c>1 && k.length>2);
   // (informatief, alleen als er echt iets opvalt — laten we streaming-achtige namen niet forceren)
 
+  // ── 6b. Grootste daler — een compliment is ook sturing ──
+  if (prevExp > 0) {
+    const dalers = Object.entries(prevCats)
+      .map(([cat, was]) => ({ cat, was, nu: cats[cat] || 0, diff: (cats[cat] || 0) - was }))
+      .filter(d => d.was > 20 && d.diff < -15)
+      .sort((a, b) => a.diff - b.diff);
+    if (dalers.length) {
+      const d = dalers[0];
+      const pct = Math.round((Math.abs(d.diff) / d.was) * 100);
+      tips.push({
+        type: 'good',
+        icon: '📉',
+        title: `${d.cat} ging ${pct}% omlaag`,
+        text: `Je gaf hier <strong>${fmt(Math.abs(d.diff))} minder</strong> uit dan vorige cyclus (${fmt(d.was)} → ${fmt(d.nu)}). Als je dit vasthoudt, scheelt dat <strong>${fmt(Math.abs(d.diff) * 12)}</strong> per jaar.`
+      });
+    }
+  }
+
+  // ── 6c. Loopt je uitgeven voor op de klok? ──
+  if (income > 0 && expense > 0) {
+    const totalDays = getCycleTotalDays();
+    const dayNow    = Math.max(1, Math.min(totalDays, getCycleDayProgress()));
+    const tijdPct   = (dayNow / totalDays) * 100;
+    const geldPct   = (expense / income) * 100;
+
+    if (geldPct - tijdPct > 15) {
+      const perDagRest = (income - expense) / Math.max(1, totalDays - dayNow);
+      tips.push({
+        type: 'alert',
+        icon: '⏳',
+        title: 'Je geeft sneller uit dan de tijd verstrijkt',
+        text: `Je bent <strong>${Math.round(tijdPct)}%</strong> van de cyclus door, maar <strong>${Math.round(geldPct)}%</strong> van je inkomen is al op. Om het uit te zingen kun je nog zo'n <strong>${fmt(perDagRest)} per dag</strong> uitgeven.`
+      });
+    } else if (tijdPct - geldPct > 15) {
+      tips.push({
+        type: 'good',
+        icon: '🐢',
+        title: 'Je ligt voor op schema',
+        text: `Je bent <strong>${Math.round(tijdPct)}%</strong> van de cyclus door en pas <strong>${Math.round(geldPct)}%</strong> van je inkomen uitgegeven. Mooie marge — zet het verschil opzij voordat het vanzelf opgaat.`
+      });
+    }
+  }
+
   // ── 7. Positieve nudge als er weinig data is ──
   if (tips.length === 0) {
     if (expense === 0) {
@@ -1938,14 +1981,11 @@ function renderAnalytics(){
   // ── Verhaal: wat gebeurt er met je geld? ──
   renderMoneyStory();
 
-  // ── Categorie verdeling ──
-  renderCatBreakdown();
+  // ── Wat je coach ziet — draagt nu de hele adviesrol ──
+  renderCoach();
 
-  // ── Vaste vs variabele lasten ──
+  // ── Vast vs vrij ──
   renderFixedVarChart(grid, text);
-
-  // ── Cyclus vergelijking ──
-  renderCycleCompare();
 
   // ── Inkomsten vs Uitgaven chart ──
   const ctx1=document.getElementById('incExpChart').getContext('2d');
@@ -1977,7 +2017,6 @@ function renderAnalytics(){
   charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,106,77,0.80)':'rgba(139,127,247,0.65)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   renderYearReport();
-  renderInsights();
 }
 
 /* ── Verhaal: wat gebeurt er met je geld ── */
@@ -2058,38 +2097,6 @@ function renderMoneyStory() {
   }
 }
 
-/* ── Categorie verdeling ── */
-function renderCatBreakdown() {
-  const el = document.getElementById('catBreakdownList');
-  const subEl = document.getElementById('catBreakdownSub');
-  if (!el) return;
-
-  const cycles = getLastNCycles(2);
-  const curr = cycles[1];
-  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
-  const total = currTx.reduce((a,t)=>a+t.amt,0);
-  if (subEl) subEl.textContent = `Totaal ${fmt(total)} deze cyclus`;
-
-  const cats = {};
-  currTx.forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  const sorted = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-
-  if (!sorted.length) { el.innerHTML = '<div class="empty-state">Geen uitgaven deze cyclus</div>'; return; }
-
-  el.innerHTML = sorted.map(([cat,amt])=>{
-    const pct = total>0 ? Math.round((amt/total)*100) : 0;
-    const col = catColor(cat);
-    return `<div class="cat-breakdown-row">
-      <span class="cat-breakdown-dot" style="background:${col}"></span>
-      <span class="cat-breakdown-name">${catEmoji(cat)} ${cat}</span>
-      <div class="cat-breakdown-bar-wrap">
-        <div class="cat-breakdown-bar" style="width:${pct}%;background:${col}"></div>
-      </div>
-      <span class="cat-breakdown-amt">${fmt(amt)}</span>
-      <span class="cat-breakdown-pct">${pct}%</span>
-    </div>`;
-  }).join('');
-}
 
 /* ── Vaste vs variabele lasten ── */
 const FIXED_CATS = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening','Transport'];
@@ -2131,39 +2138,6 @@ function renderFixedVarChart(grid, text) {
   }
 }
 
-/* ── Cyclus vergelijking per categorie ── */
-function renderCycleCompare() {
-  const el = document.getElementById('cycleCompareList');
-  if (!el) return;
-
-  const cycles = getLastNCycles(2);
-  const [prev, curr] = cycles;
-  const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
-  const prevTx = state.transactions.filter(t=>prev.match(t)&&t.type==='expense');
-
-  const cats = {}, prevCats = {};
-  currTx.forEach(t=>{cats[t.cat]=(cats[t.cat]||0)+t.amt;});
-  prevTx.forEach(t=>{prevCats[t.cat]=(prevCats[t.cat]||0)+t.amt;});
-
-  const allCats = [...new Set([...Object.keys(cats),...Object.keys(prevCats)])];
-  const diffs = allCats.map(cat=>({cat, curr:cats[cat]||0, prev:prevCats[cat]||0, diff:(cats[cat]||0)-(prevCats[cat]||0)})).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
-
-  if (!diffs.length) { el.innerHTML = '<div class="empty-state">Niet genoeg data voor vergelijking</div>'; return; }
-
-  el.innerHTML = diffs.slice(0,8).map(d=>{
-    const col = catColor(d.cat);
-    const isUp = d.diff > 0;
-    const diffColor = isUp ? 'var(--red)' : 'var(--green)';
-    const arrow = isUp ? '↑' : '↓';
-    return `<div class="cat-breakdown-row">
-      <span class="cat-breakdown-dot" style="background:${col}"></span>
-      <span class="cat-breakdown-name">${catEmoji(d.cat)} ${d.cat}</span>
-      <span style="flex:1"></span>
-      <span style="font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--text2)">${fmt(d.curr)}</span>
-      <span style="font-size:12px;font-weight:600;color:${d.diff===0?'var(--text3)':diffColor};margin-left:8px;min-width:60px;text-align:right">${d.diff===0?'—':`${arrow} ${fmt(Math.abs(d.diff))}`}</span>
-    </div>`;
-  }).join('');
-}
 
 
 /* ═══════════════════════════════════════════════
@@ -2270,27 +2244,6 @@ function renderYearReport() {
   `;
 }
 
-function renderInsights(){
-  const{income,expense,balance,cats,burnDaily,projected}=computeMetrics();
-  const ins=[];
-  if(income>0){
-    const sp=Math.round((balance/income)*100);
-    if(sp>=20)ins.push({type:'good',icon:'💚',title:'Spaardoel gehaald',body:`Je spaart ${sp}% van je inkomsten — boven de aanbevolen 20%.`});
-    else if(sp<0)ins.push({type:'bad',icon:'🚨',title:'Budget overschreden',body:`Je hebt ${fmt(Math.abs(balance))} meer uitgegeven dan je hebt verdiend.`});
-    else ins.push({type:'warn',icon:'⚠️',title:'Spaarquote laag',body:`Je spaart ${sp}% — probeer 20% (${fmt(income*0.2)}/maand).`});
-    const hp=Math.round(((cats['Wonen']||0)/income)*100);
-    if(hp>40)ins.push({type:'warn',icon:'🏠',title:'Hoge woonlasten',body:`Wonen is ${hp}% van inkomen. Max. advies: 30-35%.`});
-    const subs=cats['Abonnementen']||0;
-    if(subs>0)ins.push({type:'info',icon:'📱',title:'Abonnementen',body:`${fmt(subs)}/maand. Check regelmatig welke je gebruikt.`});
-    if(projected>income)ins.push({type:'bad',icon:'📈',title:'Burn rate te hoog',body:`Projectie ${fmt(projected)} > inkomen ${fmt(income)}.`});
-    else ins.push({type:'good',icon:'📉',title:'Burn rate gezond',body:`Projectie ${fmt(projected)} blijft onder inkomen.`});
-    const bc=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
-    if(bc)ins.push({type:'info',icon:'📊',title:'Grootste categorie',body:`${bc[0]}: ${fmt(bc[1])} (${Math.round(bc[1]/expense*100)}%).`});
-    const savTotal=state.savings.accounts.reduce((a,acc)=>a+acc.balance,0);
-    if(savTotal>0)ins.push({type:'good',icon:'🏦',title:'Totaal gespaard',body:`Je hebt ${fmt(savTotal)} op je spaarrekening(en) staan.`});
-  }else{ins.push({type:'info',icon:'💡',title:'Voeg inkomsten toe',body:'Voeg je maandinkomen toe om inzichten te genereren.'});}
-  document.getElementById('insightsGrid').innerHTML=ins.map(i=>`<div class="insight-tile ${i.type}"><div class="insight-icon">${i.icon}</div><div class="insight-title">${i.title}</div><div class="insight-body">${i.body}</div></div>`).join('');
-}
 
 /* ═══════════════════════════════════════════════
    RENDER BUDGETS & GOALS
