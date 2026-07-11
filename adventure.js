@@ -715,9 +715,24 @@ function renderAdventure() {
 
   /* ── Actieve missie ── */
   const misEl = document.getElementById('advMission');
-  if (misEl && a.currentMission) {
-    const tpl = MISSIONS.find(m => m.id === a.currentMission.id);
-    if (tpl) {
+  if (misEl) {
+    if (!a.currentMission) {
+      // Geen missie? Forceer er een.
+      const { start, end } = currentWeekRange();
+      assignNewMission(start, end);
+    }
+    const tpl = a.currentMission ? MISSIONS.find(m => m.id === a.currentMission.id) : null;
+
+    if (!tpl) {
+      // Missie-ID onbekend (bijv. na een update waarin missies zijn hernoemd) — reset
+      const { start, end } = currentWeekRange();
+      assignNewMission(start, end);
+      misEl.innerHTML = '<div class="empty-state">Nieuwe missie wordt geladen...</div>';
+      setTimeout(() => renderAdventure(), 100);
+      return;
+    }
+
+    {
       const res = tpl.check(a.currentMission);
       const daysLeft = Math.max(0, Math.ceil((new Date(a.currentMission.weekEnd + 'T23:59:59') - new Date()) / 86400000));
       misEl.innerHTML = `
@@ -770,7 +785,6 @@ function renderAdventure() {
           const isPast    = i < path.position;
           const isCurrent = i === path.position;
           const cls = isCurrent ? 'current' : isPast ? 'past' : 'future';
-          const cost = stepsForStop(i);
           return `
             <div class="adv-path-stop ${cls}">
               <div class="adv-path-marker">
@@ -778,9 +792,7 @@ function renderAdventure() {
               </div>
               <div class="adv-path-info">
                 <div class="adv-path-name">${s.name}</div>
-                ${isCurrent
-                  ? `<div class="adv-path-desc">${s.desc}</div>`
-                  : `<div class="adv-path-cost">${cost} ${cost===1?'missie':'missies'}</div>`}
+                ${isCurrent ? `<div class="adv-path-desc">${s.desc}</div>` : ''}
               </div>
               ${isCurrent ? '<span class="adv-path-you">jij</span>' : ''}
             </div>`;
