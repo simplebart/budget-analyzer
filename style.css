@@ -3274,3 +3274,67 @@ body.app-locked .pin-screen { visibility: visible; }
   font-size: 16px;
   color: var(--gold);
 }
+
+/* ── DE BRUG TUSSEN DE CYCLI ──
+   Het slotsaldo van de vorige cyclus is je startkapitaal nu.
+   Deze regel maakt die doorloop zichtbaar. */
+.carry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--edge);
+}
+.carry:empty { display: none; }
+
+.carry-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.carry-lbl {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.11em;
+  color: var(--chalk-3);
+}
+
+.carry-val {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px; font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--chalk-2);
+}
+
+.carry-arrow {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+.carry-arrow.up {
+  color: var(--jade);
+  background: var(--jade-dim);
+  border: 1px solid color-mix(in srgb, var(--jade) 30%, transparent);
+}
+.carry-arrow.down {
+  color: var(--ember);
+  background: var(--ember-dim);
+  border: 1px solid color-mix(in srgb, var(--ember) 30%, transparent);
+}
+
+.carry-delta {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px; font-weight: 800;
+}
+
+/* De laatste waarde is waar je nu staat — die mag oplichten */
+.carry-item:last-of-type .carry-val { color: var(--chalk); }
+
+@media (max-width: 620px) {
+  .carry { gap: 10px; }
+  .carry-val { font-size: 13px; }
+}
