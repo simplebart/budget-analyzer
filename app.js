@@ -25,10 +25,15 @@ let state = {
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1 },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
-  gamification: {
-    unlockedBadges: [],   // [badgeId]
-    challenge: null,      // { id, type, target, cat, startDate, endDate }
-    records: {}           // { bestSaveCycle, longestStreak, ... }
+  adventure: {
+    xp: 0,                    // totale ervaring, bepaalt level 1-100
+    pathPosition: 0,          // huidige halte op het pad
+    cityLevel: 0,             // stad groeit, krimpt NOOIT
+    unlockedBadges: [],
+    currentMission: null,     // { id, weekStart, weekEnd, config }
+    missionHistory: [],       // [{ id, week, success, xpChange }]
+    lastCycleReport: null,    // datum van laatste cyclusrapport
+    stats: { missionsCompleted: 0, missionsFailed: 0, streak: 0, bestStreak: 0 }
   },
   lastRecurringMonth: '',  // 'YYYY-MM' of last applied month
   firstVisit: true,
@@ -193,7 +198,7 @@ function loadState() {
 const PAGE_TITLES = {
   dashboard:'Dashboard', transactions:'Transacties', analytics:'Analytics',
   budget:'Budgetten', goals:'Doelen', savings:'Spaarrekening', settings:'Instellingen'
-, achievements: 'Prestaties' };
+, achievements: 'Avontuur' };
 
 function navigate(page) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -220,7 +225,7 @@ function navigate(page) {
   if (page==='savings')      renderSavings();
   if (page==='settings')     renderSettings();
   if (page==='recurring')    renderRecurring();
-  if (page==='achievements') renderGamification();
+  if (page==='achievements' && typeof renderAdventure === 'function') renderAdventure();
 }
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
@@ -1187,212 +1192,6 @@ function computeMetrics() {
 }
 
 /* ═══════════════════════════════════════════════
-   GAMIFICATION — badges, levels, records, challenges
-   Beloont écht financieel gedrag, niet app-gebruik.
-   ═══════════════════════════════════════════════ */
-
-const BADGES = [
-  // Spaar-mijlpalen
-  { id: 'save_100',   icon: '🌱', name: 'Eerste stap',      desc: 'Eerste €100 gespaard',        check: s => s.totalSaved >= 100 },
-  { id: 'save_500',   icon: '💰', name: 'Buffertje',        desc: '€500 op je spaarrekening',    check: s => s.totalSaved >= 500 },
-  { id: 'save_1000',  icon: '🏦', name: 'Vier cijfers',     desc: '€1.000 gespaard',             check: s => s.totalSaved >= 1000 },
-  { id: 'save_5000',  icon: '💎', name: 'Serieus spaarder', desc: '€5.000 gespaard',             check: s => s.totalSaved >= 5000 },
-
-  // Budget-discipline
-  { id: 'budget_1',   icon: '✅', name: 'Binnen budget',    desc: 'Één cyclus binnen budget',    check: s => s.cyclesInBudget >= 1 },
-  { id: 'budget_3',   icon: '🔥', name: 'Op dreef',         desc: '3 cycli op rij binnen budget', check: s => s.streakInBudget >= 3 },
-  { id: 'budget_6',   icon: '⚡', name: 'IJzeren discipline', desc: '6 cycli op rij binnen budget', check: s => s.streakInBudget >= 6 },
-
-  // Spaarquote
-  { id: 'rate_10',    icon: '📈', name: 'Tien procent',     desc: '10% van je inkomen gespaard', check: s => s.savingsRate >= 10 },
-  { id: 'rate_20',    icon: '🚀', name: 'Twintig procent',  desc: '20% spaarquote gehaald',      check: s => s.savingsRate >= 20 },
-  { id: 'rate_30',    icon: '🌟', name: 'Superspaarder',    desc: '30% spaarquote gehaald',      check: s => s.savingsRate >= 30 },
-
-  // Vaste lasten
-  { id: 'fixed_50',   icon: '🏠', name: 'Lage lasten',      desc: 'Vaste lasten onder 50%',      check: s => s.fixedPct > 0 && s.fixedPct < 50 },
-
-  // Noodfonds
-  { id: 'emergency_3', icon: '🛡️', name: 'Noodfonds',       desc: '3 maanden uitgaven gespaard', check: s => s.emergencyMonths >= 3 },
-
-  // Doelen
-  { id: 'goal_1',     icon: '🎯', name: 'Doelgericht',      desc: 'Eerste spaardoel behaald',    check: s => s.goalsCompleted >= 1 },
-
-  // Consistentie
-  { id: 'track_50',   icon: '📝', name: 'Nauwkeurig',       desc: '50 transacties bijgehouden',  check: s => s.txCount >= 50 },
-  { id: 'track_200',  icon: '📚', name: 'Boekhouder',       desc: '200 transacties bijgehouden', check: s => s.txCount >= 200 },
-];
-
-const LEVELS = [
-  { level: 1, name: 'Starter',    minScore: 0,   icon: '🌱' },
-  { level: 2, name: 'Bouwer',     minScore: 150, icon: '🔨' },
-  { level: 3, name: 'Beheerser',  minScore: 350, icon: '⚖️' },
-  { level: 4, name: 'Strateeg',   minScore: 600, icon: '🧭' },
-  { level: 5, name: 'Meester',    minScore: 900, icon: '👑' },
-];
-
-/* Bereken alle stats die badges nodig hebben */
-function computeGameStats() {
-  const cycles = getLastNCycles(12);
-  const totalSaved = (state.savings.accounts||[]).reduce((a,acc)=>a+acc.balance,0);
-
-  // Cycli binnen budget (uitgaven < inkomsten)
-  let cyclesInBudget = 0, streakInBudget = 0, currentStreak = 0;
-  const cycleResults = cycles.map(c => {
-    const tx  = state.transactions.filter(t=>c.match(t));
-    const inc = tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-    const exp = tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-    const hasData = tx.length > 0;
-    const inBudget = hasData && inc > 0 && exp <= inc;
-    return { inBudget, hasData, inc, exp, net: inc - exp };
-  }).filter(r => r.hasData);
-
-  cycleResults.forEach(r => {
-    if (r.inBudget) { cyclesInBudget++; currentStreak++; streakInBudget = Math.max(streakInBudget, currentStreak); }
-    else currentStreak = 0;
-  });
-
-  // Huidige cyclus spaarquote
-  const m = computeMetrics();
-  const savingsRate = m.income > 0 ? Math.round((m.balance / m.income) * 100) : 0;
-
-  // Vaste lasten percentage
-  const fixedCats = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening'];
-  const currTx = getCurrentMonthTx();
-  const fixed = currTx.filter(t=>t.type==='expense'&&fixedCats.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
-  const fixedPct = m.income > 0 ? Math.round((fixed / m.income) * 100) : 0;
-
-  // Noodfonds: hoeveel maanden uitgaven heb je gespaard?
-  const avgMonthlyExpense = cycleResults.length
-    ? cycleResults.reduce((a,r)=>a+r.exp,0) / cycleResults.length
-    : 0;
-  const emergencyMonths = avgMonthlyExpense > 0 ? totalSaved / avgMonthlyExpense : 0;
-
-  // Doelen behaald
-  const goalsCompleted = (state.goals||[]).filter(g => g.saved >= g.target).length;
-
-  return {
-    totalSaved,
-    cyclesInBudget,
-    streakInBudget,
-    savingsRate,
-    fixedPct,
-    emergencyMonths,
-    goalsCompleted,
-    txCount: state.transactions.length,
-    cycleResults,
-    bestCycle: cycleResults.length ? [...cycleResults].sort((a,b)=>b.net-a.net)[0] : null,
-  };
-}
-
-/* Bepaal level op basis van een gecombineerde score */
-function computeLevel(stats) {
-  let score = 0;
-  score += Math.min(300, stats.totalSaved / 20);          // max 300 punten voor €6000 gespaard
-  score += stats.streakInBudget * 50;                      // 50 per cyclus streak
-  score += Math.max(0, stats.savingsRate) * 5;             // 5 per procent spaarquote
-  score += stats.goalsCompleted * 75;                      // 75 per behaald doel
-  score += Math.min(100, stats.txCount / 2);               // max 100 voor bijhouden
-  score += stats.emergencyMonths * 40;                     // 40 per maand noodfonds
-
-  const level = [...LEVELS].reverse().find(l => score >= l.minScore) || LEVELS[0];
-  const nextLevel = LEVELS.find(l => l.minScore > score);
-  const progress = nextLevel
-    ? Math.round(((score - level.minScore) / (nextLevel.minScore - level.minScore)) * 100)
-    : 100;
-
-  return { ...level, score: Math.round(score), nextLevel, progress };
-}
-
-/* Check welke badges nieuw ontgrendeld zijn */
-function checkBadges() {
-  const stats = computeGameStats();
-  if (!state.gamification) state.gamification = { unlockedBadges: [], challenge: null, records: {} };
-  if (!state.gamification.unlockedBadges) state.gamification.unlockedBadges = [];
-
-  const newlyUnlocked = [];
-  BADGES.forEach(b => {
-    if (!state.gamification.unlockedBadges.includes(b.id) && b.check(stats)) {
-      state.gamification.unlockedBadges.push(b.id);
-      newlyUnlocked.push(b);
-    }
-  });
-
-  if (newlyUnlocked.length) {
-    saveState(true);
-    // Toon celebration voor de eerste nieuwe badge
-    setTimeout(() => showBadgeUnlock(newlyUnlocked[0]), 600);
-  }
-
-  return { stats, newlyUnlocked };
-}
-
-function showBadgeUnlock(badge) {
-  const overlay = document.createElement('div');
-  overlay.className = 'badge-unlock-overlay';
-  overlay.innerHTML = `
-    <div class="badge-unlock-card">
-      <div class="badge-unlock-glow"></div>
-      <div class="badge-unlock-icon">${badge.icon}</div>
-      <div class="badge-unlock-label">Badge ontgrendeld!</div>
-      <div class="badge-unlock-name">${badge.name}</div>
-      <div class="badge-unlock-desc">${badge.desc}</div>
-      <button class="btn-primary" onclick="this.closest('.badge-unlock-overlay').remove()">Mooi!</button>
-    </div>`;
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  document.body.appendChild(overlay);
-}
-
-/* ── CHALLENGES ── */
-const CHALLENGE_TEMPLATES = [
-  { id: 'no_small',    icon: '☕', name: 'Geen kleine lekken',  desc: 'Geen uitgaven onder €15 deze week',
-    check: () => {
-      const ch = state.gamification.challenge;
-      const small = state.transactions.filter(t=>t.type==='expense'&&t.amt<15&&t.date>=ch.startDate&&t.date<=ch.endDate);
-      return { done: small.length === 0, progress: small.length, label: `${small.length} kleine uitgaven` };
-    }},
-  { id: 'cat_limit',   icon: '🎯', name: 'Categorie-limiet',    desc: 'Houd een categorie onder een bedrag',
-    needsConfig: true,
-    check: () => {
-      const ch = state.gamification.challenge;
-      const spent = state.transactions.filter(t=>t.type==='expense'&&t.cat===ch.cat&&t.date>=ch.startDate&&t.date<=ch.endDate).reduce((a,t)=>a+t.amt,0);
-      return { done: spent <= ch.target, progress: spent, label: `${fmt(spent)} van ${fmt(ch.target)}` };
-    }},
-  { id: 'save_amount', icon: '💰', name: 'Spaardoel',           desc: 'Spaar een bedrag deze cyclus',
-    needsConfig: true,
-    check: () => {
-      const ch = state.gamification.challenge;
-      const m = computeMetrics();
-      return { done: m.balance >= ch.target, progress: m.balance, label: `${fmt(Math.max(0,m.balance))} van ${fmt(ch.target)}` };
-    }},
-];
-
-function startChallenge(templateId, config = {}) {
-  const tpl = CHALLENGE_TEMPLATES.find(t => t.id === templateId);
-  if (!tpl) return;
-
-  const now = new Date();
-  const endDate = new Date(now);
-  endDate.setDate(endDate.getDate() + 7); // standaard: 7 dagen
-
-  state.gamification.challenge = {
-    id: templateId,
-    startDate: today(),
-    endDate: dateToStr(endDate),
-    target: config.target || 0,
-    cat: config.cat || null,
-  };
-  saveState();
-  renderGamification();
-  showToast(`Uitdaging gestart: ${tpl.name}`, 'success');
-}
-
-function cancelChallenge() {
-  state.gamification.challenge = null;
-  saveState();
-  renderGamification();
-}
-
-/* ═══════════════════════════════════════════════
    GELDCOACH — slimme observaties & bespaartips
    Analyseert patronen in je uitgaven en geeft
    concrete, persoonlijke adviezen.
@@ -1522,128 +1321,6 @@ function generateCoachTips() {
   }
 
   return tips;
-}
-
-function renderGamification() {
-  const { stats } = checkBadges();
-  const lvl = computeLevel(stats);
-
-  // ── Level kaart ──
-  const lvlEl = document.getElementById('levelCard');
-  if (lvlEl) {
-    lvlEl.innerHTML = `
-      <div class="level-header">
-        <div class="level-icon">${lvl.icon}</div>
-        <div class="level-info">
-          <div class="level-name">Level ${lvl.level} — ${lvl.name}</div>
-          <div class="level-score">${lvl.score} punten</div>
-        </div>
-      </div>
-      ${lvl.nextLevel ? `
-      <div class="level-progress-wrap">
-        <div class="level-progress-track">
-          <div class="level-progress-fill" style="width:${lvl.progress}%"></div>
-        </div>
-        <div class="level-progress-label">
-          Nog ${lvl.nextLevel.minScore - lvl.score} punten tot <strong>${lvl.nextLevel.name}</strong> ${lvl.nextLevel.icon}
-        </div>
-      </div>` : '<div class="level-max">🎉 Hoogste level bereikt!</div>'}
-    `;
-  }
-
-  // ── Badges ──
-  const badgeEl = document.getElementById('badgeGrid');
-  if (badgeEl) {
-    const unlocked = state.gamification?.unlockedBadges || [];
-    badgeEl.innerHTML = BADGES.map(b => {
-      const isUnlocked = unlocked.includes(b.id);
-      return `<div class="badge-item ${isUnlocked ? 'unlocked' : 'locked'}" title="${b.desc}">
-        <div class="badge-icon">${isUnlocked ? b.icon : '🔒'}</div>
-        <div class="badge-name">${b.name}</div>
-        <div class="badge-desc">${b.desc}</div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── Records ──
-  const recEl = document.getElementById('recordsList');
-  if (recEl) {
-    const records = [];
-    if (stats.bestCycle) records.push({ icon:'🏆', label:'Beste cyclus',        value: fmt(stats.bestCycle.net) });
-    if (stats.streakInBudget > 0) records.push({ icon:'🔥', label:'Langste reeks binnen budget', value: `${stats.streakInBudget} ${stats.streakInBudget===1?'cyclus':'cycli'}` });
-    if (stats.totalSaved > 0) records.push({ icon:'💰', label:'Totaal gespaard',  value: fmt(stats.totalSaved) });
-    if (stats.savingsRate > 0) records.push({ icon:'📈', label:'Huidige spaarquote', value: `${stats.savingsRate}%` });
-    if (stats.emergencyMonths > 0) records.push({ icon:'🛡️', label:'Noodfonds',   value: `${stats.emergencyMonths.toFixed(1)} maanden uitgaven` });
-    records.push({ icon:'📝', label:'Transacties bijgehouden', value: stats.txCount });
-
-    recEl.innerHTML = records.map(r => `
-      <div class="record-row">
-        <span class="record-icon">${r.icon}</span>
-        <span class="record-label">${r.label}</span>
-        <span class="record-value">${r.value}</span>
-      </div>`).join('');
-  }
-
-  // ── Challenge ──
-  const chEl = document.getElementById('challengeArea');
-  if (chEl) {
-    const ch = state.gamification?.challenge;
-    if (ch) {
-      const tpl = CHALLENGE_TEMPLATES.find(t => t.id === ch.id);
-      const result = tpl ? tpl.check() : { done:false, label:'—' };
-      const daysLeft = Math.max(0, Math.ceil((new Date(ch.endDate) - new Date()) / (1000*60*60*24)));
-      chEl.innerHTML = `
-        <div class="challenge-active ${result.done ? 'success' : ''}">
-          <div class="challenge-head">
-            <span class="challenge-icon">${tpl?.icon || '🎯'}</span>
-            <div>
-              <div class="challenge-name">${tpl?.name || 'Uitdaging'}</div>
-              <div class="challenge-status">${result.label} · nog ${daysLeft} ${daysLeft===1?'dag':'dagen'}</div>
-            </div>
-            <button class="btn-secondary btn-sm" onclick="cancelChallenge()">Stoppen</button>
-          </div>
-          ${result.done ? '<div class="challenge-done">✅ Je bent op koers!</div>' : ''}
-        </div>`;
-    } else {
-      chEl.innerHTML = `
-        <div class="challenge-picker">
-          <p class="challenge-intro">Kies een uitdaging om jezelf scherp te houden:</p>
-          ${CHALLENGE_TEMPLATES.map(t => `
-            <button class="challenge-option" onclick="openChallengeConfig('${t.id}')">
-              <span class="challenge-opt-icon">${t.icon}</span>
-              <div>
-                <div class="challenge-opt-name">${t.name}</div>
-                <div class="challenge-opt-desc">${t.desc}</div>
-              </div>
-              <span class="challenge-opt-arrow">→</span>
-            </button>`).join('')}
-        </div>`;
-    }
-  }
-}
-
-function openChallengeConfig(templateId) {
-  const tpl = CHALLENGE_TEMPLATES.find(t => t.id === templateId);
-  if (!tpl) return;
-
-  if (!tpl.needsConfig) {
-    startChallenge(templateId);
-    return;
-  }
-
-  // Vraag om configuratie
-  if (templateId === 'cat_limit') {
-    const cats = state.categories.map(c => c.name);
-    const cat = prompt(`Welke categorie wil je beperken?\n\nOpties: ${cats.join(', ')}`);
-    if (!cat || !cats.includes(cat)) { if(cat) showToast('Onbekende categorie', 'warn'); return; }
-    const target = parseFloat(prompt(`Maximum bedrag voor ${cat} deze week?`));
-    if (isNaN(target) || target <= 0) return;
-    startChallenge(templateId, { cat, target });
-  } else if (templateId === 'save_amount') {
-    const target = parseFloat(prompt('Hoeveel wil je deze cyclus sparen?'));
-    if (isNaN(target) || target <= 0) return;
-    startChallenge(templateId, { target });
-  }
 }
 
 function renderCoach() {
@@ -1799,7 +1476,7 @@ function renderDashboard(){
   renderMonthComparison();
   renderMobileHero();
   renderCoach();
-  checkBadges();
+  if (typeof renderDashMission === 'function') renderDashMission();
 }
 
 /* ═══════════════════════════════════════════════
@@ -3056,8 +2733,13 @@ function repairTimestampDates() {
 async function init(){
   loadState();
   if(!state.recurring) state.recurring=[];
-  if(!state.gamification) state.gamification = { unlockedBadges: [], challenge: null, records: {} };
-  if(!state.gamification.unlockedBadges) state.gamification.unlockedBadges = [];
+  if(!state.adventure) state.adventure = {
+    xp: 0, pathPosition: 0, cityLevel: 0, unlockedBadges: [],
+    currentMission: null, missionHistory: [], lastCycleReport: null,
+    stats: { missionsCompleted: 0, missionsFailed: 0, streak: 0, bestStreak: 0 }
+  };
+  if(!state.adventure.stats) state.adventure.stats = { missionsCompleted:0, missionsFailed:0, streak:0, bestStreak:0 };
+  if(!state.adventure.missionHistory) state.adventure.missionHistory = [];
   // Repareer eventuele datums die als ISO timestamp zijn opgeslagen (met T en tijdzone)
   // Dit was veroorzaakt door de toISOString()-bug die inmiddels is opgelost
   repairTimestampDates();
@@ -3084,6 +2766,13 @@ async function init(){
   document.body.classList.remove('app-locked');
 
   setTimeout(()=>checkBudgetNotifications(), 1500);
+
+  // Avontuur: zorg dat er een missie loopt, evalueer afgelopen week, toon cyclusrapport
+  if (typeof ensureMission === 'function') {
+    ensureMission();
+    if (typeof checkCycleReport === 'function') checkCycleReport();
+  }
+
   if(!state.firstVisit && gsConfig.apiKey) {
     setTimeout(()=>syncFromSheets(), 1000);
   }
