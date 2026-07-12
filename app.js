@@ -1342,12 +1342,41 @@ function getCurrentMonthTx() {
    het. Pas als je bevestigt schuift 'loggedThrough' op, en pas dan
    mag het dagbudget die dagen als écht-niks-uitgegeven meetellen.
    ═══════════════════════════════════════════════════════════ */
+
+/* Datums die via Google Sheets terugkomen kunnen een tijdstempel
+   meekrijgen (2026-07-11T22:00:00.000Z). Alles wat een datum
+   verwacht, knipt die er eerst af. Anders krijg je Invalid Date. */
+function cleanDate(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;      // al goed
+
+  if (s.includes('T')) {
+    const datum = s.split('T')[0];
+    const uur   = parseInt((s.match(/T(\d{2}):/) || [])[1] || '0', 10);
+
+    /* 22:00 of 23:00 UTC is in Nederland al de VOLGENDE dag. Zomaar het
+       datumdeel afknippen levert dan een dag te vroeg op — dezelfde val
+       als bij de transacties. Dus schuif een dag op. */
+    if (uur >= 22) {
+      const d = new Date(datum + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + 1);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+    }
+    return datum;
+  }
+
+  const d = new Date(s);
+  return isNaN(d) ? '' : dateToStr(d);
+}
+
 function loggedThroughDate() {
-  const s = state.settings.loggedThrough;
+  const s = cleanDate(state.settings.loggedThrough);
   if (s) return s;
   // Nooit bevestigd? Val terug op je laatste transactie.
   const laatste = state.transactions
-    .map(t => t.date)
+    .map(t => cleanDate(t.date))
+    .filter(Boolean)
     .sort()
     .pop();
   return laatste || today();
@@ -1357,12 +1386,14 @@ function loggedThroughDate() {
 function loggingGap() {
   const door = loggedThroughDate();
   const nu   = today();
-  if (door >= nu) return null;
+  if (!door || door >= nu) return null;
 
   const d1 = new Date(door + 'T12:00:00');
   const d2 = new Date(nu   + 'T12:00:00');
+  if (isNaN(d1) || isNaN(d2)) return null;              // liever niks dan onzin
+
   const dagen = Math.round((d2 - d1) / 86400000) - 1;   // gisteren is de laatste
-  if (dagen <= 0) return null;
+  if (!Number.isFinite(dagen) || dagen <= 0) return null;
 
   const van = new Date(d1); van.setDate(van.getDate() + 1);
   const tot = new Date(d2); tot.setDate(tot.getDate() - 1);
@@ -2905,10 +2936,10 @@ async function syncFromSheets() {
         if (r[0]==='cycleStartDay') state.settings.cycleStartDay = parseInt(r[1])||1;
         if (r[0]==='userName')      state.settings.userName      = r[1]||'';
         if (r[0]==='checkingName')  state.settings.checkingName  = r[1]||'';
-        if (r[0]==='openingDate')   state.settings.openingDate   = r[1]||'';
+        if (r[0]==='openingDate')   state.settings.openingDate   = cleanDate(r[1]);
         if (r[0]==='keepTarget')    state.settings.keepTarget    = parseFloat(r[1])||0;
         if (r[0]==='budgetRhythm')  state.settings.budgetRhythm  = r[1]||'day';
-        if (r[0]==='loggedThrough') state.settings.loggedThrough = r[1]||'';
+        if (r[0]==='loggedThrough') state.settings.loggedThrough = cleanDate(r[1]);
         if (r[0]==='openingBalance')
           state.settings.openingBalance = (r[1]==='' || r[1]==null) ? null : parseFloat(r[1]);
       });
@@ -3407,6 +3438,9 @@ async function init(){
   // Repareer eventuele datums die als ISO timestamp zijn opgeslagen (met T en tijdzone)
   // Dit was veroorzaakt door de toISOString()-bug die inmiddels is opgelost
   repairTimestampDates();
+  // Instellingen-datums kunnen ook vervuild zijn geraakt via Sheets
+  state.settings.openingDate   = cleanDate(state.settings.openingDate);
+  state.settings.loggedThrough = cleanDate(state.settings.loggedThrough);
   document.documentElement.setAttribute('data-theme',state.settings.theme);
 
   // KRITIEK: app-inhoud blijft verborgen tot de PIN-check is afgerond.
