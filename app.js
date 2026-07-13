@@ -1859,9 +1859,6 @@ function renderDashboard(){
   /* ── Het dagbudget ── */
   renderToday();
 
-  /* ── De brug tussen de cycli ── */
-  renderCarry();
-
   /* ── De volgende zet: de missie ── */
   renderBoardQuest();
 
@@ -1979,53 +1976,6 @@ function renderToday() {
 
 /* De missie als "volgende zet" op het speelbord */
 
-/* De brug tussen de cycli: waar je mee begon, en waar je op afstevent.
-   Dit is het antwoord op "wat loopt er door van de ene cyclus naar de
-   andere" — het slotsaldo van de vorige is je startkapitaal nu. */
-function renderCarry() {
-  const el = document.getElementById('carry');
-  if (!el) return;
-
-  if (!hasBankSetup()) { el.innerHTML = ''; return; }
-
-  const { start } = getCurrentCycleRange();
-  const startStr = dateToStr(start);
-
-  // Het saldo op de dag vóór deze cyclus begon
-  const dagErvoor = new Date(start);
-  dagErvoor.setDate(dagErvoor.getDate() - 1);
-
-  let meegenomen = bankBalanceAt(dateToStr(dagErvoor));
-
-  /* Valt je ijkpunt precies op (of na) het begin van deze cyclus, dan
-     bestaat "de dag ervoor" nog niet in de boekhouding. Je beginsaldo
-     ís dan wat je meenam. */
-  if (meegenomen === null && state.settings.openingDate >= startStr) {
-    meegenomen = Number(state.settings.openingBalance);
-  }
-
-  const nu = computeBankBalance();
-  if (meegenomen === null || nu === null || isNaN(meegenomen)) { el.innerHTML = ''; return; }
-
-  const verschil = nu - meegenomen;
-  const groeit   = verschil >= 0;
-
-  el.innerHTML = `
-    <span class="carry-item">
-      <span class="carry-lbl">Meegenomen</span>
-      <span class="carry-val">${meegenomen < 0 ? '−' : ''}${fmt(Math.abs(meegenomen))}</span>
-    </span>
-
-    <span class="carry-arrow ${groeit ? 'up' : 'down'}">
-      ${groeit ? '↗' : '↘'}
-      <span class="carry-delta">${groeit ? '+' : '−'}${fmt(Math.abs(verschil))}</span>
-    </span>
-
-    <span class="carry-item">
-      <span class="carry-lbl">Nu</span>
-      <span class="carry-val">${nu < 0 ? '−' : ''}${fmt(Math.abs(nu))}</span>
-    </span>`;
-}
 
 function renderBoardQuest() {
   const el = document.getElementById('boardQuestInner');
