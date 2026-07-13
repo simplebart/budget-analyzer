@@ -314,10 +314,17 @@ function txInRange(start, end) {
   return state.transactions.filter(t => t.date >= start && t.date <= end);
 }
 
+/* Alleen dagen die daadwerkelijk voorbij zijn.
+   Een dag die nog moet komen kan geen "stille dag" zijn — hij heeft nog
+   geen kans gehad. Zonder deze knip staat er op maandag al "7 van 1
+   nuldagen", alsof de missie al voltooid is. */
 function daysInRange(start, end) {
   const out = [];
+  const vandaag = today();
+  const stop = end < vandaag ? end : vandaag;   // niet verder dan nu
+
   let d = new Date(start + 'T12:00:00');
-  const endD = new Date(end + 'T12:00:00');
+  const endD = new Date(stop + 'T12:00:00');
   while (d <= endD) {
     out.push(dateToStr(d));
     d.setDate(d.getDate() + 1);
@@ -361,7 +368,16 @@ function topSpendCategory() {
 }
 
 /* ── Missie selectie: de app kiest, niet de gebruiker ── */
-function pickMissionForLevel(level) {
+/* De missie wordt NIET willekeurig gekozen.
+
+   Met Math.random() kiest elk apparaat zijn eigen missie zodra het
+   opstart — vóór de synchronisatie klaar is. Dan heeft je telefoon een
+   andere opdracht dan je computer, en wint wie het laatst synchroniseert.
+
+   In plaats daarvan leiden we de keuze af uit de week en je tier. Twee
+   apparaten met dezelfde week en hetzelfde level komen dan onafhankelijk
+   op precies dezelfde missie uit. Geen race, geen afwijking. */
+function pickMissionForLevel(level, weekStart) {
   let tier;
   if (level < 10)      tier = 1;
   else if (level < 25) tier = 2;
@@ -370,15 +386,14 @@ function pickMissionForLevel(level) {
   else                 tier = 5;
 
   const pool = MISSIONS.filter(m => m.tier === tier);
+  if (!pool.length) return MISSIONS[0];
 
-  // Vermijd dezelfde missie als vorige week
-  const lastId = state.adventure.missionHistory.length
-    ? state.adventure.missionHistory[state.adventure.missionHistory.length-1].id
-    : null;
-  const filtered = pool.filter(m => m.id !== lastId);
-  const candidates = filtered.length ? filtered : pool;
+  // Zaad uit week + tier: elke week een andere missie, maar overal dezelfde
+  const seed = `${weekStart}|${tier}`;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
 
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  return pool[Math.abs(h) % pool.length];
 }
 
 /* ── Weekgrenzen (ma t/m zo) ── */
@@ -412,7 +427,7 @@ function ensureMission() {
 
 function assignNewMission(weekStart, weekEnd) {
   const lvl = getLevelInfo().level;
-  const tpl = pickMissionForLevel(lvl);
+  const tpl = pickMissionForLevel(lvl, weekStart);
   const config = tpl.build();
 
   state.adventure.currentMission = {
