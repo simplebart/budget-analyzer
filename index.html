@@ -138,16 +138,15 @@
     <!-- ══════════════ DASHBOARD ══════════════ -->
     <section class="page active" id="page-dashboard">
 
-      <!-- ═══ HET SPEELBORD — de held van de pagina ═══
-           Eén paneel beantwoordt alles: wat heb ik nog, waar sta ik
-           in de cyclus, en wat is mijn volgende zet. -->
-      <div class="board">
+      <!-- ═══ KPI-STRIP — elke waarde met verloop én vergelijking ═══ -->
+      <div class="kpis" id="kpis"></div>
 
+      <!-- ═══ HET BORD ═══ -->
+      <div class="board">
         <div class="board-main">
           <div class="board-eyebrow" id="boardEyebrow">Nog te besteden</div>
           <div class="board-amount" id="boardAmount">€0,00</div>
 
-          <!-- De cyclusmeter: je budget als energiecellen -->
           <div class="board-meter" id="boardMeter">
             <div class="board-meter-fill" id="boardMeterFill"></div>
             <div class="board-meter-today" id="boardMeterToday" title="vandaag"></div>
@@ -158,37 +157,34 @@
             <span id="boardDays">— dagen te gaan</span>
           </div>
 
-          <!-- Het dagbudget: wat kun je vandaag nog uitgeven? -->
           <div class="today" id="today"></div>
-
-          <div class="board-stats">
-            <div class="board-stat">
-              <span class="board-stat-lbl">Binnen</span>
-              <span class="board-stat-val" id="boardIn">€0</span>
-            </div>
-            <div class="board-stat">
-              <span class="board-stat-lbl">Eruit</span>
-              <span class="board-stat-val" id="boardOut">€0</span>
-            </div>
-            <div class="board-stat">
-              <span class="board-stat-lbl">Per dag</span>
-              <span class="board-stat-val" id="boardBurn">€0</span>
-            </div>
-            <div class="board-stat">
-              <span class="board-stat-lbl">Gespaard</span>
-              <span class="board-stat-val" id="boardSaved">0%</span>
-            </div>
-          </div>
-
         </div>
 
-        <!-- De volgende zet -->
         <div class="board-quest" id="boardQuest" onclick="navigate('achievements')">
           <div class="board-quest-inner" id="boardQuestInner"></div>
         </div>
       </div>
 
-      <!-- ═══ Waar het heen ging ═══ -->
+      <!-- ═══ DE TRECHTER + DE KALENDER ═══ -->
+      <div class="split-wide">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Van binnen naar over</span>
+            <span class="card-sub" id="funnelSub"></span>
+          </div>
+          <div id="funnel" class="funnel"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Uitgaven per dag</span>
+            <span class="card-sub" id="heatSub"></span>
+          </div>
+          <div id="heat"></div>
+        </div>
+      </div>
+
+      <!-- ═══ CATEGORIEËN + DONUT ═══ -->
       <section class="strip">
         <h2 class="strip-title">Vergeleken met vorige cyclus</h2>
         <span class="strip-meta" id="catStripMeta"></span>
@@ -206,36 +202,34 @@
               <div class="donut-lbl">deze cyclus</div>
             </div>
           </div>
-          <!-- De lijst links is de legenda; deze blijft leeg -->
           <div class="donut-legend" id="donutLegend" hidden></div>
         </div>
       </div>
 
-      <!-- ═══ Laatste zetten ═══ -->
-      <section class="strip">
-        <h2 class="strip-title">Laatste zetten</h2>
-        <button class="link-btn" onclick="navigate('transactions')">Alles zien →</button>
-      </section>
+      <!-- ═══ VERLOOP + LAATSTE ZETTEN ═══ -->
+      <div class="split-wide">
+        <div class="card chart-card">
+          <div class="card-header">
+            <span class="card-title">De cyclus tot nu toe</span>
+            <div id="cashflowLegend" class="chart-legend"></div>
+          </div>
+          <div class="chart-wrap" style="height:230px">
+            <canvas id="cashflowChart"></canvas>
+          </div>
+        </div>
 
-      <div class="card recent-card">
-        <div class="tx-mini-list" id="recentTxList">
-          <div class="empty-state">Nog geen transacties. Tik op + om te beginnen.</div>
+        <div class="card recent-card">
+          <div class="card-header">
+            <span class="card-title">Laatste zetten</span>
+            <button class="link-btn" onclick="navigate('transactions')">Alles zien →</button>
+          </div>
+          <div class="tx-mini-list" id="recentTxList">
+            <div class="empty-state">Nog geen transacties.</div>
+          </div>
         </div>
       </div>
 
-      <!-- ═══ De cyclus tot nu toe ═══ -->
-      <section class="strip">
-        <h2 class="strip-title">De cyclus tot nu toe</h2>
-        <div id="cashflowLegend" class="chart-legend"></div>
-      </section>
-
-      <div class="card chart-card">
-        <div class="chart-wrap" style="height:250px">
-          <canvas id="cashflowChart"></canvas>
-        </div>
-      </div>
-
-      <!-- ═══ Coach ═══ -->
+      <!-- ═══ COACH ═══ -->
       <div class="card coach-card" id="dashCoachCard" style="display:none">
         <div class="coach-header">
           <span class="coach-icon">🧠</span>
@@ -243,7 +237,6 @@
         </div>
         <div id="dashCoachTip" class="coach-tips"></div>
       </div>
-
     </section>
 
     <!-- ══════════════ TRANSACTIONS ══════════════ -->
