@@ -12,16 +12,16 @@ let state = {
     transactions: []    // [{ id, accountId, type:'deposit'|'withdrawal'|'interest', amt, date, desc }]
   },
   categories: [
-    { name:'Wonen',          emoji:'🏠', color:'#8B7FF7', deletable:false },
-    { name:'Boodschappen',   emoji:'🛒', color:'#2FCB8B', deletable:false },
-    { name:'Transport',      emoji:'🚌', color:'#E9A83C', deletable:false },
-    { name:'Eten & Drinken', emoji:'🍽', color:'#FF6A4D', deletable:false },
-    { name:'Gezondheid',     emoji:'💊', color:'#8B7FF7', deletable:false },
-    { name:'Vrije tijd',     emoji:'🎮', color:'#E87BC7', deletable:false },
-    { name:'Abonnementen',   emoji:'📱', color:'#FFA36B', deletable:false },
-    { name:'Kleding',        emoji:'👕', color:'#5FD3E8', deletable:false },
-    { name:'Sparen',         emoji:'💰', color:'#7BE0B0', deletable:false },
-    { name:'Overig',         emoji:'📦', color:'#8B84AC', deletable:false },
+    { name:'Wonen',          emoji:'🏠', color:'#FAFAFA', deletable:false },
+    { name:'Boodschappen',   emoji:'🛒', color:'#D4D4D4', deletable:false },
+    { name:'Transport',      emoji:'🚌', color:'#A8A8A8', deletable:false },
+    { name:'Eten & Drinken', emoji:'🍽', color:'#858585', deletable:false },
+    { name:'Gezondheid',     emoji:'💊', color:'#666666', deletable:false },
+    { name:'Vrije tijd',     emoji:'🎮', color:'#4D4D4D', deletable:false },
+    { name:'Abonnementen',   emoji:'📱', color:'#3A3A3A', deletable:false },
+    { name:'Kleding',        emoji:'👕', color:'#2B2B2B', deletable:false },
+    { name:'Sparen',         emoji:'💰', color:'#FAFAFA', deletable:false },
+    { name:'Overig',         emoji:'📦', color:'#D4D4D4', deletable:false },
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1,
               checkingName:'', openingBalance:null, openingDate:'', keepTarget:0,
@@ -42,7 +42,7 @@ let state = {
   firstVisit: true,
   filters: { type:'all', cat:'all', sort:'date-desc', search:'' },
   analyticsPeriod: 'month',
-  selectedGoalColor: '#8B7FF7'
+  selectedGoalColor: '#FAFAFA'
 };
 
 let charts = {};
@@ -52,8 +52,8 @@ let csvParsed = { headers:[], rows:[], mapping:{}, finalRows:[] };
 let csvStep = 1;
 let selectedBank = 'auto';
 
-const GOAL_COLORS = ['#8B7FF7','#2FCB8B','#E9A83C','#FF6A4D','#8B7FF7','#E87BC7','#FFA36B','#5FD3E8'];
-const SAVINGS_COLORS = ['#2FCB8B','#8B7FF7','#E9A83C','#E87BC7','#8B7FF7','#5FD3E8','#FFA36B','#FF6A4D'];
+const GOAL_COLORS = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
+const SAVINGS_COLORS = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
 
 /* ═══════════════════════════════════════════════
    UTILS
@@ -161,7 +161,15 @@ function getLastNCycles(n) {
   }
   return cycles;
 }
-const catColor = name => (state.categories.find(c=>c.name===name)||{color:'#8B84AC'}).color;
+/* In monochroom draagt de POSITIE het onderscheid, niet de kleur.
+   Elke categorie krijgt een vaste grijstint op basis van zijn plek in
+   de lijst — stabiel, dus dezelfde categorie houdt dezelfde tint. */
+const catColor = name => {
+  const g = (typeof greysLight === 'function') ? greysLight() : GREYS;
+  const i = state.categories.findIndex(c => c.name === name);
+  return g[(i < 0 ? 0 : i) % g.length];
+};
+const catColorRaw = name => (state.categories.find(c=>c.name===name)||{color:'#8B84AC'}).color;
 const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'}).emoji;
 
 /* ═══════════════════════════════════════════════
@@ -613,7 +621,7 @@ function deleteGoal(id) { state.goals=state.goals.filter(g=>g.id!==id); saveStat
 /* ═══════════════════════════════════════════════
    SAVINGS ACCOUNTS
    ═══════════════════════════════════════════════ */
-let selectedSavingsColor = '#2FCB8B';
+let selectedSavingsColor = '#FAFAFA';
 
 function renderSavingsColorPicker() {
   const wrap = document.getElementById('savAccColorPicker');
@@ -1835,10 +1843,10 @@ function renderKpiStrip() {
   const vorige  = a => a.length > 1 ? a[a.length - 2] : 0;
 
   const kaarten = [
-    { sleutel:'in',   label:'Binnen',   kleur:'var(--jade)',  hex:'#2FCB8B', omlaagIsGoed:false },
-    { sleutel:'uit',  label:'Eruit',    kleur:'var(--ember)', hex:'#FF6A4D', omlaagIsGoed:true  },
-    { sleutel:'weg',  label:'Weggezet', kleur:'var(--lilac)', hex:'#8B7FF7', omlaagIsGoed:false },
-    { sleutel:'over', label:'Over',     kleur:'var(--gold)',  hex:'#E9A83C', omlaagIsGoed:false },
+    { sleutel:'in',   label:'Binnen',   kleur:'var(--chalk)',   hex:'#FAFAFA', omlaagIsGoed:false },
+    { sleutel:'uit',  label:'Eruit',    kleur:'var(--chalk)',   hex:'#A8A8A8', omlaagIsGoed:true  },
+    { sleutel:'weg',  label:'Weggezet', kleur:'var(--chalk)',   hex:'#858585', omlaagIsGoed:false },
+    { sleutel:'over', label:'Over',     kleur:'var(--chalk)',   hex:'#D4D4D4', omlaagIsGoed:false },
   ];
 
   el.innerHTML = kaarten.map(k => {
@@ -2003,6 +2011,11 @@ function renderHeatmap() {
 }
 
 function renderDashboard(){
+  const hello = document.getElementById('helloTitle');
+  if (hello) {
+    const naam = (state.settings.userName || '').trim();
+    hello.textContent = naam ? `Welkom terug, ${naam}! 👋` : 'Welkom terug 👋';
+  }
   document.getElementById('sidebarMonth').textContent = cycleLabel();
 
   const { income, expense, transfer, balance, cats, burnDaily } = computeMetrics();
@@ -2301,6 +2314,65 @@ function renderDashCategories(cats, total) {
   renderDonutChart(cats);
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   GRAFIEKEN IN GRIJSWAARDE
+
+   Zonder kleur moet vorm het onderscheid dragen. Daarom krijgt elke
+   categorie een eigen grijstint én een eigen arcering — precies zoals
+   een gedrukte grafiek dat doet wanneer er geen inkt over is.
+   ═══════════════════════════════════════════════════════════ */
+const GREYS = ['#FAFAFA','#D4D4D4','#A8A8A8','#858585','#666666','#4D4D4D','#3A3A3A','#2B2B2B'];
+
+function greysLight() {
+  return state.settings.theme === 'light'
+    ? ['#171717','#3D3D3D','#5C5C5C','#7A7A7A','#999999','#B5B5B5','#CFCFCF','#E2E2E2']
+    : GREYS;
+}
+
+/* Een arceerpatroon als canvas-vulling. Vier soorten, zodat aangrenzende
+   segmenten nooit hetzelfde lijken, ook niet bij gelijke grijswaarde. */
+const _patCache = {};
+function hatch(kleur, soort) {
+  const sleutel = kleur + '|' + soort;
+  if (_patCache[sleutel]) return _patCache[sleutel];
+
+  const c = document.createElement('canvas');
+  c.width = c.height = 8;
+  const x = c.getContext('2d');
+  if (!x) return kleur;
+
+  x.fillStyle = kleur;
+  x.globalAlpha = 0.22;
+  x.fillRect(0, 0, 8, 8);
+  x.globalAlpha = 1;
+  x.strokeStyle = kleur;
+  x.lineWidth = 1.6;
+
+  if (soort === 0) {                       // effen
+    x.globalAlpha = 1; x.fillStyle = kleur; x.fillRect(0,0,8,8);
+  } else if (soort === 1) {                // diagonaal ↗
+    x.beginPath(); x.moveTo(-2,10); x.lineTo(10,-2); x.moveTo(-2,2); x.lineTo(2,-2);
+    x.moveTo(6,10); x.lineTo(10,6); x.stroke();
+  } else if (soort === 2) {                // diagonaal ↘
+    x.beginPath(); x.moveTo(-2,-2); x.lineTo(10,10); x.moveTo(-2,6); x.lineTo(2,10);
+    x.moveTo(6,-2); x.lineTo(10,2); x.stroke();
+  } else {                                 // stippellijnen
+    x.beginPath(); x.moveTo(0,2); x.lineTo(8,2); x.moveTo(0,6); x.lineTo(8,6); x.stroke();
+  }
+
+  const ctx2 = document.createElement('canvas').getContext('2d');
+  const pat = ctx2 ? ctx2.createPattern(c, 'repeat') : kleur;
+  _patCache[sleutel] = pat || kleur;
+  return _patCache[sleutel];
+}
+
+/* De vulling voor segment i: eigen grijstint, eigen arcering */
+function segFill(i) {
+  const g = greysLight();
+  return hatch(g[i % g.length], i % 4);
+}
+
 function chartColors(){
   const light = state.settings.theme === 'light';
   return {
@@ -2311,7 +2383,7 @@ function chartColors(){
 
 /* De standaard categoriekleuren van het palet — gebruikt als een
    categorie geen eigen kleur heeft. */
-const PALETTE = ['#8B7FF7','#2FCB8B','#FF6A4D','#E9A83C','#5FD3E8','#E87BC7','#7BE0B0','#FFA36B'];
+const PALETTE = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
 
 function renderCashflowChart(){
   const { grid, text } = chartColors();
@@ -2332,9 +2404,9 @@ function renderCashflowChart(){
   const toonSaldo = hasBankSetup() && saldoLijn.some(v => v !== null);
 
   const datasets = [
-    { type:'bar', label:'Binnen',   data:incD, backgroundColor:'rgba(47,203,139,0.78)',  borderRadius:5, borderSkipped:false, order:2 },
-    { type:'bar', label:'Eruit',    data:expD, backgroundColor:'rgba(255,106,77,0.78)',  borderRadius:5, borderSkipped:false, order:2 },
-    { type:'bar', label:'Weggezet', data:traD, backgroundColor:'rgba(139,127,247,0.70)', borderRadius:5, borderSkipped:false, order:2 },
+    { type:'bar', label:'Binnen',   data:incD, backgroundColor:greysLight()[0],  borderRadius:5, borderSkipped:false, order:2 },
+    { type:'bar', label:'Eruit',    data:expD, backgroundColor:greysLight()[3],  borderRadius:5, borderSkipped:false, order:2 },
+    { type:'bar', label:'Weggezet', data:traD, backgroundColor:greysLight()[5], borderRadius:5, borderSkipped:false, order:2 },
   ];
 
   if (toonSaldo) {
@@ -2342,14 +2414,14 @@ function renderCashflowChart(){
       type:'line',
       label:'Op je rekening',
       data: saldoLijn,
-      borderColor:'#E9A83C',
-      backgroundColor:'rgba(233,168,60,0.10)',
+      borderColor:greysLight()[0],
+      backgroundColor:'transparent',
       borderWidth:2.5,
       tension:0.35,
       fill:true,
       pointRadius:4,
-      pointBackgroundColor:'#E9A83C',
-      pointBorderColor: state.settings.theme==='light' ? '#fff' : '#16122E',
+      pointBackgroundColor:greysLight()[0],
+      pointBorderColor: state.settings.theme==='light' ? '#fff' : '#000',
       pointBorderWidth:2,
       spanGaps:true,
       order:1,
@@ -2382,11 +2454,12 @@ function renderCashflowChart(){
     }
   });
 
+  const g = greysLight();
   const leg = [
-    ...(toonSaldo ? [{ label:'Op je rekening', color:'#E9A83C' }] : []),
-    { label:'Binnen',   color:'#2FCB8B' },
-    { label:'Eruit',    color:'#FF6A4D' },
-    { label:'Weggezet', color:'#8B7FF7' },
+    ...(toonSaldo ? [{ label:'Op je rekening', color:g[0] }] : []),
+    { label:'Binnen',   color:g[0] },
+    { label:'Eruit',    color:g[3] },
+    { label:'Weggezet', color:g[5] },
   ];
   document.getElementById('cashflowLegend').innerHTML = leg.map(l =>
     `<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`
@@ -2400,7 +2473,7 @@ function renderDonutChart(cats){
   const ctx=document.getElementById('categoryChart').getContext('2d');
   if(charts.donut)charts.donut.destroy();
   if(!entries.length){ if(charts.donut) charts.donut.destroy(); return; }
-  charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map(([k])=>catColor(k)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#16122E',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
+  charts.donut=new Chart(ctx,{type:'doughnut',data:{labels:entries.map(([k])=>k),datasets:[{data:entries.map(([,v])=>Math.round(v)),backgroundColor:entries.map((_,i)=>segFill(i)),borderWidth:2,borderColor:state.settings.theme==='light'?'#ffffff':'#000000',hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')+' ('+Math.round(c.raw/total*100)+'%)'}}}}});
   document.getElementById('donutLegend').innerHTML=entries.slice(0,6).map(([k,v])=>`<div class="donut-leg-row"><span class="donut-leg-name"><span class="donut-leg-dot" style="background:${catColor(k)}"></span>${k}</span><span class="donut-leg-amt">${fmt(v)}</span></div>`).join('');
 }
 
@@ -2479,22 +2552,22 @@ function renderAnalytics(){
   const ctx1=document.getElementById('incExpChart').getContext('2d');
   if(charts.incExp)charts.incExp.destroy();
   charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[
-    {label:'Inkomsten',data:incArr,borderColor:'#2FCB8B',backgroundColor:'rgba(47,203,139,0.10)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#2FCB8B'},
-    {label:'Uitgaven', data:expArr,borderColor:'#FF6A4D',backgroundColor:'rgba(255,106,77,0.10)',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:'#FF6A4D'}
+    {label:'Inkomsten',data:incArr,borderColor:greysLight()[0],backgroundColor:'transparent',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:greysLight()[0]},
+    {label:'Uitgaven', data:expArr,borderColor:greysLight()[3],backgroundColor:'transparent',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:greysLight()[3]}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:'#2FCB8B'},{label:'Uitgaven',color:'#FF6A4D'}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:greysLight()[0]},{label:'Uitgaven',color:greysLight()[3]}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
 
   // ── Categorie trend ──
   const topCats=Object.entries(state.transactions.filter(t=>t.type==='expense').reduce((a,t)=>{a[t.cat]=(a[t.cat]||0)+t.amt;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
   const ctx2=document.getElementById('catTrendChart').getContext('2d');
   if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:ptRadius}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:greysLight()[topCats.indexOf(cat) % 8],backgroundColor:'transparent',tension:0.4,pointRadius:ptRadius}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   // ── Spaarquote ──
   const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
   const ctx3=document.getElementById('savingsRateChart').getContext('2d');
   if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?'rgba(47,203,139,0.78)':v>=0?'rgba(233,168,60,0.78)':'rgba(255,106,77,0.78)'),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?greysLight()[0]:v>=0?greysLight()[3]:greysLight()[5]),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
 
   // ── Weekdag patroon ──
   const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
@@ -2502,7 +2575,7 @@ function renderAnalytics(){
   const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
   const ctx4=document.getElementById('weekdayChart').getContext('2d');
   if(charts.weekday)charts.weekday.destroy();
-  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?'rgba(255,106,77,0.80)':'rgba(139,127,247,0.65)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?greysLight()[0]:greysLight()[4]),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   renderYearReport();
 }
@@ -3021,7 +3094,7 @@ function debugCycles() {
     const endStr = dateToStr(c.end);
     const tx = state.transactions.filter(t => c.match(t));
     const exp = tx.filter(t => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
-    console.log(`%c[${idx}] ${c.label} (${startStr} t/m ${endStr}) — ${tx.length} tx — uitgaven: €${exp.toFixed(2)}`, 'font-weight:bold;color:#8B7FF7');
+    console.log(`%c[${idx}] ${c.label} (${startStr} t/m ${endStr}) — ${tx.length} tx — uitgaven: €${exp.toFixed(2)}`, 'font-weight:bold');
     tx.filter(t => t.type === 'expense').forEach(t => {
       console.log(`   ${t.date} | ${t.desc} | €${t.amt}`);
     });
@@ -3053,7 +3126,7 @@ async function syncFromSheets() {
     if (goalRows.length > 1) {
       state.goals = goalRows.slice(1).filter(r=>r[0]).map(r=>({
         id:Number(r[0]), name:r[1]||'', target:parseFloat(r[2])||0,
-        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#8B7FF7'
+        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#FAFAFA'
       }));
     }
 
@@ -3061,7 +3134,7 @@ async function syncFromSheets() {
     if (savAccRows.length > 1) {
       state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r=>({
         id:Number(r[0]), name:r[1]||'', balance:parseFloat(r[2])||0,
-        target:parseFloat(r[3])||0, color:r[4]||'#2FCB8B', note:r[5]||''
+        target:parseFloat(r[3])||0, color:r[4]||'#FAFAFA', note:r[5]||''
       }));
     }
 
