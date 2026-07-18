@@ -4,76 +4,93 @@
    beloningsmunt. Twee dragers: de HUD en de Cyclusmeter.
    ═══════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* ───────────── TOKENS ───────────── */
+/* ───────────── TOKENS ─────────────
+   Monochroom. Kleur is voorbehouden aan één ding: of een cijfer de
+   goede of de verkeerde kant op ging. Al het andere is grijswaarde,
+   zodat de data zelf het contrast draagt.
+   ───────────────────────────────── */
 :root {
-  --ink:      #16122E;
-  --ink-2:    #201B40;
-  --ink-3:    #2C2554;
-  --ink-4:    #38306A;
-  --edge:     #322B5E;
-  --edge-hi:  #453C7E;
+  --ink:      #000000;   /* pagina */
+  --ink-2:    #0A0A0A;   /* kaart */
+  --ink-3:    #141414;   /* inzet / hover */
+  --ink-4:    #1F1F1F;   /* actieve inzet */
+  --edge:     #1C1C1C;   /* rand */
+  --edge-hi:  #2E2E2E;   /* sterke rand */
 
-  --chalk:    #F2EDE3;
-  --chalk-2:  #A8A0C8;
-  --chalk-3:  #6F678F;
+  --chalk:    #FAFAFA;   /* primaire tekst */
+  --chalk-2:  #A1A1A1;   /* labels */
+  --chalk-3:  #6B6B6B;   /* bijschriften */
 
-  --gold:     #E9A83C;
-  --gold-dim: rgba(233,168,60,0.14);
-  --jade:     #2FCB8B;
-  --jade-dim: rgba(47,203,139,0.14);
-  --ember:    #FF6A4D;
-  --ember-dim:rgba(255,106,77,0.14);
-  --lilac:    #8B7FF7;
-  --lilac-dim:rgba(139,127,247,0.16);
+  /* De enige kleuren in de app: richting van een verandering */
+  --up:       #4ADE80;
+  --down:     #F87171;
 
-  /* Aliassen die de JS gebruikt */
+  /* Grijstrap voor grafieken — vijf treden van licht naar donker */
+  --g1: #FAFAFA;
+  --g2: #C4C4C4;
+  --g3: #8A8A8A;
+  --g4: #5A5A5A;
+  --g5: #333333;
+
+  /* Aliassen die de JS gebruikt — allemaal grijs, behalve op/neer */
   --bg: var(--ink);  --bg2: var(--ink-2);  --bg3: var(--ink-3);
   --text: var(--chalk);  --text2: var(--chalk-2);  --text3: var(--chalk-3);
   --border: var(--edge);  --border-strong: var(--edge-hi);
-  --accent: var(--lilac);  --accent-dim: var(--lilac-dim);  --accent-dim2: var(--ink-4);
-  --green: var(--jade);  --red: var(--ember);  --amber: var(--gold);  --purple: var(--lilac);
+  --accent: var(--chalk);  --accent-dim: rgba(250,250,250,0.08);  --accent-dim2: var(--ink-4);
+  --green: var(--up);  --red: var(--down);  --amber: var(--g2);  --purple: var(--g3);
 
-  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
-  --font-body:    'Manrope', system-ui, -apple-system, sans-serif;
+  --gold: var(--g2);      --gold-dim: rgba(196,196,196,0.10);
+  --jade: var(--up);      --jade-dim: rgba(74,222,128,0.10);
+  --ember: var(--down);   --ember-dim: rgba(248,113,113,0.10);
+  --lilac: var(--g2);     --lilac-dim: rgba(196,196,196,0.10);
 
-  --r-sm: 10px;  --r: 14px;  --r-lg: 18px;  --r-xl: 24px;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Strak, zoals de referentie: kleine radii, geen zachte hoeken */
+  --r-sm: 6px;  --r: 8px;  --r-lg: 10px;  --r-xl: 12px;
   --radius: var(--r);  --radius-lg: var(--r-lg);
 
-  --lift-1: 0 1px 0 rgba(255,255,255,0.05) inset, 0 2px 8px rgba(8,5,24,0.35);
-  --lift-2: 0 1px 0 rgba(255,255,255,0.07) inset, 0 8px 24px rgba(8,5,24,0.45);
-  --lift-3: 0 1px 0 rgba(255,255,255,0.08) inset, 0 20px 50px rgba(8,5,24,0.6);
+  /* Vlak. Geen zwevende kaarten, alleen randen. */
+  --lift-1: none;
+  --lift-2: none;
+  --lift-3: 0 24px 60px rgba(0,0,0,0.85);
 
-  --t-fast: 120ms cubic-bezier(0.3,0,0.2,1);
-  --t:      220ms cubic-bezier(0.3,0,0.2,1);
-  --t-slow: 520ms cubic-bezier(0.16,1,0.3,1);
-  --spring: 520ms cubic-bezier(0.34,1.4,0.5,1);
+  --t-fast: 100ms cubic-bezier(0.3,0,0.2,1);
+  --t:      180ms cubic-bezier(0.3,0,0.2,1);
+  --t-slow: 420ms cubic-bezier(0.16,1,0.3,1);
+  --spring: 420ms cubic-bezier(0.34,1.3,0.5,1);
   --transition: var(--t);
 
-  --sidebar-w: 244px;
+  --sidebar-w: 232px;
 }
 
 [data-theme="light"] {
-  --ink:      #F1EFF8;
-  --ink-2:    #FFFFFF;
-  --ink-3:    #E9E5F6;
-  --ink-4:    #DCD6F0;
-  --edge:     #DAD4EE;
-  --edge-hi:  #C3BAE2;
+  --ink:      #FFFFFF;
+  --ink-2:    #FAFAFA;
+  --ink-3:    #F2F2F2;
+  --ink-4:    #E8E8E8;
+  --edge:     #E8E8E8;
+  --edge-hi:  #D4D4D4;
 
-  --chalk:    #1B1638;
-  --chalk-2:  #5E568A;
-  --chalk-3:  #8B84AC;
+  --chalk:    #0A0A0A;
+  --chalk-2:  #525252;
+  --chalk-3:  #8A8A8A;
 
-  --gold:     #C4831E;  --gold-dim: rgba(196,131,30,0.12);
-  --jade:     #17A26B;  --jade-dim: rgba(23,162,107,0.12);
-  --ember:    #E0492A;  --ember-dim:rgba(224,73,42,0.12);
-  --lilac:    #6A5CE0;  --lilac-dim:rgba(106,92,224,0.12);
+  --up:       #16A34A;
+  --down:     #DC2626;
 
-  --lift-1: 0 1px 0 rgba(255,255,255,0.9) inset, 0 2px 8px rgba(40,30,80,0.07);
-  --lift-2: 0 1px 0 rgba(255,255,255,0.9) inset, 0 8px 24px rgba(40,30,80,0.10);
-  --lift-3: 0 1px 0 rgba(255,255,255,0.9) inset, 0 20px 50px rgba(40,30,80,0.16);
+  --g1: #171717;  --g2: #525252;  --g3: #8A8A8A;  --g4: #B8B8B8;  --g5: #E0E0E0;
+
+  --gold-dim: rgba(82,82,82,0.08);
+  --jade-dim: rgba(22,163,74,0.09);
+  --ember-dim:rgba(220,38,38,0.09);
+  --lilac-dim:rgba(82,82,82,0.08);
+  --accent-dim: rgba(10,10,10,0.06);
+
+  --lift-3: 0 24px 60px rgba(0,0,0,0.18);
 }
 
 /* ───────────── RESET & BASIS ───────────── */
@@ -92,19 +109,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  pointer-events: none; z-index: 0;
-  background:
-    radial-gradient(900px 500px at 8% -5%,  rgba(139,127,247,0.10), transparent 60%),
-    radial-gradient(800px 500px at 100% 0%, rgba(233,168,60,0.06),  transparent 55%);
-}
-[data-theme="light"] body::before {
-  background:
-    radial-gradient(900px 500px at 8% -5%,  rgba(106,92,224,0.07), transparent 60%),
-    radial-gradient(800px 500px at 100% 0%, rgba(196,131,30,0.05), transparent 55%);
-}
+body::before { display: none; }
 
 ::selection { background: var(--lilac); color: #fff; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
@@ -3788,3 +3793,227 @@ body.app-locked .pin-screen { visibility: visible; }
 }
 .fun-track.short { border-color: color-mix(in srgb, var(--ember) 40%, var(--edge)); }
 .fun-track.short .fun-pct { color: var(--ember); font-weight: 800; }
+
+/* ═══════════════════════════════════════════════════════════════
+   DICHTHEID EN TROUW AAN DE REFERENTIE
+
+   Twee ingrepen. Ten eerste: strakker. Kleinere radii, minder
+   binnenruimte, kleinere letters — de referentie propt veel in weinig.
+   Ten tweede: kleur is uitsluitend voor RICHTING. Een bedrag is wit,
+   een verandering is groen of rood. Verder niets.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── De begroeting ── */
+.hello {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.hello-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--chalk);
+}
+
+/* ── Panelen: strak en vlak ── */
+.card,
+.budget-card, .goal-card, .savings-acc-card,
+.kpi-card, .filter-bar, .tx-summary {
+  border-radius: var(--r-lg);
+  box-shadow: none;
+}
+.card { padding: 15px; }
+.card-header { margin-bottom: 13px; }
+.card-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.card-sub   { font-size: 11px; }
+
+.card:hover,
+.budget-card:hover, .goal-card:hover, .savings-acc-card:hover,
+.kpi-card:hover, .insight-tile:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--edge-hi);
+}
+
+/* ── Koppen ── */
+.page-title  { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+.page-sub    { font-size: 12px; }
+.page-eyebrow { color: var(--chalk-3); }
+.strip { margin: 22px 0 10px; }
+.strip-title { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* ── Het bord ── */
+.board-main   { padding: 20px 22px; }
+.board-quest  { padding: 20px 22px; }
+.board-amount { font-size: clamp(30px, 3.2vw, 40px); margin-bottom: 16px; }
+.board-eyebrow, .kpi-name, .kpi-label, .burn-lbl, .today-lbl,
+.board-stat-lbl, .fun-label { letter-spacing: 0.09em; }
+
+/* De meter wordt strakker en verliest zijn gloed */
+.board-meter { height: 16px; border-radius: 5px; }
+.board-meter-fill { background: var(--chalk) !important; border-radius: 2px; }
+.board-meter::after { border-radius: 2px; }
+.board-meter-today { background: var(--chalk); box-shadow: none; height: 22px; }
+
+/* Het dagbudget: geen kleurcodering meer, alleen een getal */
+.today { border-radius: var(--r); padding: 12px 14px; }
+.today-amt { font-size: 20px; color: var(--chalk) !important; }
+.today-fill { background: var(--chalk) !important; }
+.today-rail { border-radius: 3px; }
+
+/* ── KPI-strip ── */
+.kpi { padding: 13px 14px; }
+.kpi-num { font-size: 20px; }
+.kpi-delta.good { color: var(--up); }
+.kpi-delta.bad  { color: var(--down); }
+
+/* Kleur alleen voor richting: de KPI-waarde zelf is altijd wit */
+.kpi-num[style] { color: var(--chalk) !important; }
+
+/* ── Trechter: één grijstint, geen verloop ── */
+.fun-fill {
+  background: var(--g2) !important;
+  border-radius: 3px;
+}
+.fun-step.last .fun-fill {
+  background: var(--chalk) !important;
+  box-shadow: none;
+}
+.fun-fill.deficit {
+  background: repeating-linear-gradient(135deg,
+    rgba(248,113,113,0.18) 0 6px,
+    rgba(248,113,113,0.05) 6px 12px) !important;
+}
+.fun-track { height: 20px; border-radius: 4px; }
+.fun-val   { font-size: 13px; }
+
+/* ── Kalender: grijstrap in plaats van rood ── */
+.heat-cell.s1 { background: #262626; border-color: transparent; }
+.heat-cell.s2 { background: #454545; border-color: transparent; }
+.heat-cell.s3 { background: #7A7A7A; border-color: transparent; }
+.heat-cell.s4 { background: #FAFAFA; border-color: transparent; }
+.heat-cell.now { box-shadow: 0 0 0 1.5px var(--chalk); }
+
+[data-theme="light"] .heat-cell.s1 { background: #E5E5E5; }
+[data-theme="light"] .heat-cell.s2 { background: #B8B8B8; }
+[data-theme="light"] .heat-cell.s3 { background: #6E6E6E; }
+[data-theme="light"] .heat-cell.s4 { background: #171717; }
+
+/* ── Bedragen: wit, met een teken dat de richting draagt ── */
+.tx-amount.income, .tx-amount.expense, .tx-amount.transfer,
+.tx-mini-amt, .cat-breakdown-amt, .cmp-amt,
+.savings-acc-balance, .donut-leg-amt, .year-topcat-amt {
+  color: var(--chalk) !important;
+}
+.tx-amount.expense, .tx-amount.transfer { opacity: 0.72; }
+
+/* Behalve waar het een verandering betreft */
+.cmp-delta.up   { color: var(--down); }
+.cmp-delta.down { color: var(--up); }
+.compare-arrow.better, .compare-delta[style*="green"] { color: var(--up); }
+.compare-arrow.worse                                  { color: var(--down); }
+
+/* ── Voortgangsbalken: wit op zwart ── */
+.budget-bar-fill, .goal-bar-fill, .cat-breakdown-bar,
+.kpi-bar, .income-bar, .expense-bar,
+.adv-xp-fill, .player-xp-fill, .hud-xp-fill, .level-progress-fill {
+  background: var(--chalk) !important;
+  box-shadow: none !important;
+}
+.cmp-bar.nu  { background: var(--chalk) !important; }
+.cmp-bar.was { background: var(--g5); }
+
+/* Budgetkaarten: de rand geeft de staat, in grijs behalve bij overschrijding */
+.budget-card.safe  { border-left-color: var(--edge-hi); }
+.budget-card.close { border-left-color: var(--g3); }
+.budget-card.over  { border-left-color: var(--down); }
+.goal-card, .goal-card.done { border-left-color: var(--edge-hi); }
+
+/* ── Zijbalk: het personagepaneel wordt grijs ── */
+.player {
+  background: var(--ink-2);
+  border-bottom: 1px solid var(--edge);
+}
+.player:hover { background: var(--ink-3); }
+.player-crest {
+  background: var(--ink-3);
+  border-color: var(--edge-hi);
+  box-shadow: none;
+  border-radius: var(--r-sm);
+}
+.player-title { font-size: 14px; font-weight: 600; }
+.player-lvl   { color: var(--chalk-3); }
+.player-xp-num { color: var(--chalk-3); }
+.hud-pip.on { background: var(--chalk); box-shadow: none; }
+
+.nav-item.active { background: var(--ink-3); }
+.nav-item.active::before { background: var(--chalk); }
+.nav-item { font-size: 13px; font-weight: 500; padding: 8px 11px; }
+.sidebar { border-radius: var(--r-lg); top: 12px; left: 12px; bottom: 12px; width: 208px; }
+
+/* ── Knoppen: vlak ── */
+.btn-primary, .btn-primary-sm {
+  background: var(--chalk);
+  color: var(--ink);
+  border-color: var(--chalk);
+  box-shadow: none;
+}
+.btn-primary:hover, .btn-primary-sm:hover {
+  background: var(--chalk-2);
+  border-color: var(--chalk-2);
+  transform: none;
+  box-shadow: none;
+}
+.btn-secondary { border-radius: var(--r-sm); }
+.btn-secondary:hover { transform: none; }
+.pill { padding: 5px 12px; font-size: 12px; font-weight: 500; }
+.pill.active {
+  background: var(--chalk);
+  color: var(--ink);
+  border-color: var(--chalk);
+  box-shadow: none;
+}
+
+/* ── Tabel: strakker ── */
+.tx-table { font-size: 12px; }
+.tx-table td { padding: 10px 11px; }
+.tx-table th { padding: 0 11px 10px; font-size: 9px; }
+.tx-cat-badge { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
+.tx-amount { font-size: 13px; }
+
+/* ── Missie en avontuur: monochroom ── */
+.adv-mission-card.on-track { background: var(--ink-2); border-color: var(--edge-hi); }
+.adv-mission-desc  { border-left-color: var(--chalk); }
+.adv-mission-status.good { color: var(--up);   background: var(--jade-dim); }
+.adv-mission-status.bad  { color: var(--chalk-2); background: var(--ink-3); }
+.adv-step-dot.filled { background: var(--chalk) !important; box-shadow: none; }
+.board-quest-state.good { color: var(--up);     background: var(--jade-dim); }
+.board-quest-state.bad  { color: var(--chalk-2); background: var(--ink-3); }
+.board-quest-eyebrow    { color: var(--chalk-3); }
+#advLevel { background: var(--ink-2); border-color: var(--edge); }
+.adv-level-icon { background: var(--ink-3); border-color: var(--edge-hi); box-shadow: none; }
+.adv-level-xp   { color: var(--chalk); }
+.adv-path-stop.current .adv-path-marker {
+  background: var(--chalk); border-color: var(--chalk); box-shadow: none;
+}
+.adv-path-stop.past .adv-path-marker { border-color: var(--g4); background: var(--ink-3); }
+.adv-path-stop.past::before, .adv-path-stop.current::before { background: var(--g4); }
+.adv-path-you { background: var(--ink-3); border-color: var(--edge-hi); color: var(--chalk-2); }
+.adv-city-emoji { filter: grayscale(1); }
+.adv-city-note  { background: var(--ink-3); border-color: var(--edge); color: var(--chalk-3); }
+.coach-card { border-left-color: var(--edge-hi); }
+.money-story-card { background: var(--ink-2); }
+.year-topcat-rank { background: var(--ink-3); border-color: var(--edge-hi); color: var(--chalk-2); }
+.gap-title { color: var(--chalk); }
+.today:has(.gap) { background: var(--ink-2); border-color: var(--edge-hi); }
+
+/* ── Emoji ontkleuren, zodat ze de grijstoon niet breken ── */
+.cat-manage-emoji, .insight-icon, .coach-tip-icon, .money-story-icon,
+.gap-icon, .year-month-icon, .empty-icon, .dash-mis-icon,
+.adv-mission-icon, .adv-hist-icon, .mobile-quick-icon, .coach-icon,
+.player-crest, .hud-crest, .adv-path-icon, .board-quest-icon {
+  filter: grayscale(1);
+}
