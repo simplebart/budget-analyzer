@@ -12,16 +12,16 @@ let state = {
     transactions: []    // [{ id, accountId, type:'deposit'|'withdrawal'|'interest', amt, date, desc }]
   },
   categories: [
-    { name:'Wonen',          emoji:'🏠', color:'#FAFAFA', deletable:false },
-    { name:'Boodschappen',   emoji:'🛒', color:'#D4D4D4', deletable:false },
-    { name:'Transport',      emoji:'🚌', color:'#A8A8A8', deletable:false },
-    { name:'Eten & Drinken', emoji:'🍽', color:'#858585', deletable:false },
-    { name:'Gezondheid',     emoji:'💊', color:'#666666', deletable:false },
-    { name:'Vrije tijd',     emoji:'🎮', color:'#4D4D4D', deletable:false },
-    { name:'Abonnementen',   emoji:'📱', color:'#3A3A3A', deletable:false },
-    { name:'Kleding',        emoji:'👕', color:'#2B2B2B', deletable:false },
-    { name:'Sparen',         emoji:'💰', color:'#FAFAFA', deletable:false },
-    { name:'Overig',         emoji:'📦', color:'#D4D4D4', deletable:false },
+    { name:'Wonen',          emoji:'🏠', color:'#7C9CFF', deletable:false },
+    { name:'Boodschappen',   emoji:'🛒', color:'#3DD68C', deletable:false },
+    { name:'Transport',      emoji:'🚌', color:'#FF8A5B', deletable:false },
+    { name:'Eten & Drinken', emoji:'🍽', color:'#F0B429', deletable:false },
+    { name:'Gezondheid',     emoji:'💊', color:'#E879C7', deletable:false },
+    { name:'Vrije tijd',     emoji:'🎮', color:'#4ECDC4', deletable:false },
+    { name:'Abonnementen',   emoji:'📱', color:'#A78BFA', deletable:false },
+    { name:'Kleding',        emoji:'👕', color:'#FF6B6B', deletable:false },
+    { name:'Sparen',         emoji:'💰', color:'#7C9CFF', deletable:false },
+    { name:'Overig',         emoji:'📦', color:'#3DD68C', deletable:false },
   ],
   settings: { currency:'€', theme:'dark', monthlyIncome:0, cycleStartDay:1,
               checkingName:'', openingBalance:null, openingDate:'', keepTarget:0,
@@ -42,7 +42,7 @@ let state = {
   firstVisit: true,
   filters: { type:'all', cat:'all', sort:'date-desc', search:'' },
   analyticsPeriod: 'month',
-  selectedGoalColor: '#FAFAFA'
+  selectedGoalColor: '#7C9CFF'
 };
 
 let charts = {};
@@ -52,8 +52,8 @@ let csvParsed = { headers:[], rows:[], mapping:{}, finalRows:[] };
 let csvStep = 1;
 let selectedBank = 'auto';
 
-const GOAL_COLORS = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
-const SAVINGS_COLORS = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
+const GOAL_COLORS = ['#7C9CFF', '#3DD68C', '#FF8A5B', '#F0B429', '#E879C7', '#4ECDC4', '#A78BFA', '#FF6B6B'];
+const SAVINGS_COLORS = ['#7C9CFF', '#3DD68C', '#FF8A5B', '#F0B429', '#E879C7', '#4ECDC4', '#A78BFA', '#FF6B6B'];
 
 /* ═══════════════════════════════════════════════
    UTILS
@@ -165,9 +165,11 @@ function getLastNCycles(n) {
    Elke categorie krijgt een vaste grijstint op basis van zijn plek in
    de lijst — stabiel, dus dezelfde categorie houdt dezelfde tint. */
 const catColor = name => {
-  const g = (typeof greysLight === 'function') ? greysLight() : GREYS;
+  const cat = state.categories.find(c => c.name === name);
+  if (cat && cat.color) return cat.color;
+  const p = (typeof palet === 'function') ? palet() : PAL_DARK;
   const i = state.categories.findIndex(c => c.name === name);
-  return g[(i < 0 ? 0 : i) % g.length];
+  return p[(i < 0 ? 0 : i) % p.length];
 };
 const catColorRaw = name => (state.categories.find(c=>c.name===name)||{color:'#8B84AC'}).color;
 const catEmoji = name => (state.categories.find(c=>c.name===name)||{emoji:'📦'}).emoji;
@@ -621,7 +623,7 @@ function deleteGoal(id) { state.goals=state.goals.filter(g=>g.id!==id); saveStat
 /* ═══════════════════════════════════════════════
    SAVINGS ACCOUNTS
    ═══════════════════════════════════════════════ */
-let selectedSavingsColor = '#FAFAFA';
+let selectedSavingsColor = '#3DD68C';
 
 function renderSavingsColorPicker() {
   const wrap = document.getElementById('savAccColorPicker');
@@ -1843,10 +1845,10 @@ function renderKpiStrip() {
   const vorige  = a => a.length > 1 ? a[a.length - 2] : 0;
 
   const kaarten = [
-    { sleutel:'in',   label:'Binnen',   kleur:'var(--chalk)',   hex:'#FAFAFA', omlaagIsGoed:false },
-    { sleutel:'uit',  label:'Eruit',    kleur:'var(--chalk)',   hex:'#A8A8A8', omlaagIsGoed:true  },
-    { sleutel:'weg',  label:'Weggezet', kleur:'var(--chalk)',   hex:'#858585', omlaagIsGoed:false },
-    { sleutel:'over', label:'Over',     kleur:'var(--chalk)',   hex:'#D4D4D4', omlaagIsGoed:false },
+    { sleutel:'in',   label:'Binnen',   kleur:'var(--income)',   hex:'#3DD68C', omlaagIsGoed:false },
+    { sleutel:'uit',  label:'Eruit',    kleur:'var(--expense)',  hex:'#FF8A5B', omlaagIsGoed:true  },
+    { sleutel:'weg',  label:'Weggezet', kleur:'var(--transfer)', hex:'#7C9CFF', omlaagIsGoed:false },
+    { sleutel:'over', label:'Over',     kleur:'var(--saved)',    hex:'#F0B429', omlaagIsGoed:false },
   ];
 
   el.innerHTML = kaarten.map(k => {
@@ -1872,7 +1874,7 @@ function renderKpiStrip() {
         <span class="kpi-name">${k.label}</span>
         ${sparkline(reeks[k.sleutel], k.hex)}
       </div>
-      <div class="kpi-num" style="color:${k.sleutel === 'over' ? k.kleur : 'var(--chalk)'}">${fmt(nu)}</div>
+      <div class="kpi-num">${fmt(nu)}</div>
       <div class="kpi-foot">${delta}</div>
     </div>`;
   }).join('');
@@ -1928,7 +1930,14 @@ function renderFunnel() {
 
   const hoogte = v => Math.max(3, (Math.max(0, v) / inkomen) * maxH);
   const grijs  = greysLight();
-  const tinten = [grijs[1], grijs[2], grijs[3], grijs[4]];
+  /* Elke etappe kleurt naar wat er is afgegaan: eerst nog volle inkomsten,
+     dan de vaste lasten eraf, dan het dagelijkse, en wat overblijft is
+     spaargeld. */
+  /* De trechter vertelt hoe inkomen in spaargeld verandert. Laat de kleur
+     dat verloop volgen — van het groen van binnenkomend geld naar het goud
+     van wat je overhoudt. Oranje ertussen mengen geeft modder. */
+  const tinten = stappen.map((_, i) =>
+    meng(soortKleur('income'), soortKleur('saved'), 1 - i / (n - 1)));
 
   // Eén etappe als gesloten pad: bovenrand heen, onderrand terug
   const etappe = (i, schaal) => {
@@ -1946,7 +1955,7 @@ function renderFunnel() {
             C ${x1-c} ${b1}, ${x0+c} ${b0}, ${x0} ${b0} Z`;
   };
 
-  const echo  = stappen.map((_, i) => `<path d="${etappe(i, 1.22)}" fill="${grijs[0]}" opacity="0.10"/>`).join('');
+  const echo  = stappen.map((_, i) => `<path d="${etappe(i, 1.22)}" fill="${tinten[i]}" opacity="0.16"/>`).join('');
   const vorm  = stappen.map((_, i) => `<path d="${etappe(i, 1)}" fill="${tinten[i]}"/>`).join('');
 
   // Scheidingen tussen de etappes
@@ -2375,55 +2384,64 @@ function renderDashCategories(cats, total) {
    categorie een eigen grijstint én een eigen arcering — precies zoals
    een gedrukte grafiek dat doet wanneer er geen inkt over is.
    ═══════════════════════════════════════════════════════════ */
-const GREYS = ['#FAFAFA','#D4D4D4','#A8A8A8','#858585','#666666','#4D4D4D','#3A3A3A','#2B2B2B'];
+/* ═══════════════════════════════════════════════════════════
+   HET PALET
 
+   Acht tinten die op zwart uit elkaar te houden zijn. Categorieën
+   krijgen er één op basis van hun plek in de lijst, dus dezelfde
+   categorie houdt altijd dezelfde kleur.
+   ═══════════════════════════════════════════════════════════ */
+const PAL_DARK  = ['#7C9CFF','#3DD68C','#FF8A5B','#F0B429','#E879C7','#4ECDC4','#A78BFA','#FF6B6B'];
+const PAL_LIGHT = ['#4A6BD6','#12A05F','#D96A2E','#B8860B','#C2479B','#199B93','#7B5BD6','#D93838'];
+
+
+/* Meng twee kleuren in JS. CSS kent color-mix(), maar een canvas en een
+   SVG-attribuut niet — die krijgen alleen een kant-en-klare hexwaarde. */
+function meng(a, b, deel) {
+  const lees = h => {
+    h = h.replace('#','');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    return [0,2,4].map(i => parseInt(h.slice(i, i+2), 16));
+  };
+  const [r1,g1,b1] = lees(a), [r2,g2,b2] = lees(b);
+  const m = (x, y) => Math.round(x * deel + y * (1 - deel));
+  return '#' + [m(r1,r2), m(g1,g2), m(b1,b2)]
+    .map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+/* Dezelfde kleur, maar doorzichtig — voor vlakken onder een lijn */
+function doorzichtig(hex, alpha) {
+  const h = hex.replace('#','');
+  const [r,g,b] = [0,2,4].map(i => parseInt(h.slice(i, i+2), 16));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function palet() {
+  return state.settings.theme === 'light' ? PAL_LIGHT : PAL_DARK;
+}
+
+/* De vier soorten geld hebben een vaste kleur */
+function soortKleur(soort) {
+  const licht = state.settings.theme === 'light';
+  return {
+    income:   licht ? '#12A05F' : '#3DD68C',
+    expense:  licht ? '#D96A2E' : '#FF8A5B',
+    transfer: licht ? '#4A6BD6' : '#7C9CFF',
+    saved:    licht ? '#B8860B' : '#F0B429',
+  }[soort];
+}
+
+/* Blijft bestaan voor neutraal meubilair in grafieken */
 function greysLight() {
   return state.settings.theme === 'light'
     ? ['#171717','#3D3D3D','#5C5C5C','#7A7A7A','#999999','#B5B5B5','#CFCFCF','#E2E2E2']
-    : GREYS;
+    : ['#FAFAFA','#D4D4D4','#A8A8A8','#858585','#666666','#4D4D4D','#3A3A3A','#2B2B2B'];
 }
 
-/* Een arceerpatroon als canvas-vulling. Vier soorten, zodat aangrenzende
-   segmenten nooit hetzelfde lijken, ook niet bij gelijke grijswaarde. */
-const _patCache = {};
-function hatch(kleur, soort) {
-  const sleutel = kleur + '|' + soort;
-  if (_patCache[sleutel]) return _patCache[sleutel];
-
-  const c = document.createElement('canvas');
-  c.width = c.height = 8;
-  const x = c.getContext('2d');
-  if (!x) return kleur;
-
-  x.fillStyle = kleur;
-  x.globalAlpha = 0.22;
-  x.fillRect(0, 0, 8, 8);
-  x.globalAlpha = 1;
-  x.strokeStyle = kleur;
-  x.lineWidth = 1.6;
-
-  if (soort === 0) {                       // effen
-    x.globalAlpha = 1; x.fillStyle = kleur; x.fillRect(0,0,8,8);
-  } else if (soort === 1) {                // diagonaal ↗
-    x.beginPath(); x.moveTo(-2,10); x.lineTo(10,-2); x.moveTo(-2,2); x.lineTo(2,-2);
-    x.moveTo(6,10); x.lineTo(10,6); x.stroke();
-  } else if (soort === 2) {                // diagonaal ↘
-    x.beginPath(); x.moveTo(-2,-2); x.lineTo(10,10); x.moveTo(-2,6); x.lineTo(2,10);
-    x.moveTo(6,-2); x.lineTo(10,2); x.stroke();
-  } else {                                 // stippellijnen
-    x.beginPath(); x.moveTo(0,2); x.lineTo(8,2); x.moveTo(0,6); x.lineTo(8,6); x.stroke();
-  }
-
-  const ctx2 = document.createElement('canvas').getContext('2d');
-  const pat = ctx2 ? ctx2.createPattern(c, 'repeat') : kleur;
-  _patCache[sleutel] = pat || kleur;
-  return _patCache[sleutel];
-}
-
-/* De vulling voor segment i: eigen grijstint, eigen arcering */
+/* De vulling voor segment i van een verdeling */
 function segFill(i) {
-  const g = greysLight();
-  return hatch(g[i % g.length], i % 4);
+  const p = palet();
+  return p[i % p.length];
 }
 
 function chartColors(){
@@ -2436,7 +2454,7 @@ function chartColors(){
 
 /* De standaard categoriekleuren van het palet — gebruikt als een
    categorie geen eigen kleur heeft. */
-const PALETTE = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
+const PALETTE = ['#7C9CFF', '#3DD68C', '#FF8A5B', '#F0B429', '#E879C7', '#4ECDC4', '#A78BFA', '#FF6B6B'];
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -2492,9 +2510,9 @@ function renderCashflowChart(){
   const toonSaldo = hasBankSetup() && saldoLijn.some(v => v !== null);
 
   const datasets = [
-    { type:'bar', label:'Binnen',   data:incD, backgroundColor:greysLight()[0],  borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
-    { type:'bar', label:'Eruit',    data:expD, backgroundColor:greysLight()[3],  borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
-    { type:'bar', label:'Weggezet', data:traD, backgroundColor:greysLight()[5], borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
+    { type:'bar', label:'Binnen',   data:incD, backgroundColor:soortKleur('income'),  borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
+    { type:'bar', label:'Eruit',    data:expD, backgroundColor:soortKleur('expense'),  borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
+    { type:'bar', label:'Weggezet', data:traD, backgroundColor:soortKleur('transfer'), borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
   ];
 
   if (toonSaldo) {
@@ -2502,13 +2520,13 @@ function renderCashflowChart(){
       type:'line',
       label:'Op je rekening',
       data: saldoLijn,
-      borderColor:greysLight()[0],
+      borderColor:soortKleur('saved'),
       backgroundColor:'transparent',
       borderWidth:2.5,
       tension:0.35,
       fill:true,
       pointRadius:4,
-      pointBackgroundColor:greysLight()[0],
+      pointBackgroundColor:soortKleur('saved'),
       pointBorderColor: state.settings.theme==='light' ? '#fff' : '#000',
       pointBorderWidth:2,
       spanGaps:true,
@@ -2545,10 +2563,10 @@ function renderCashflowChart(){
 
   const g = greysLight();
   const leg = [
-    ...(toonSaldo ? [{ label:'Op je rekening', color:g[0] }] : []),
-    { label:'Binnen',   color:g[0] },
-    { label:'Eruit',    color:g[3] },
-    { label:'Weggezet', color:g[5] },
+    ...(toonSaldo ? [{ label:'Op je rekening', color:soortKleur('saved') }] : []),
+    { label:'Binnen',   color:soortKleur('income') },
+    { label:'Eruit',    color:soortKleur('expense') },
+    { label:'Weggezet', color:soortKleur('transfer') },
   ];
   document.getElementById('cashflowLegend').innerHTML = leg.map(l =>
     `<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`
@@ -2641,22 +2659,22 @@ function renderAnalytics(){
   const ctx1=document.getElementById('incExpChart').getContext('2d');
   if(charts.incExp)charts.incExp.destroy();
   charts.incExp=new Chart(ctx1,{type:'line',data:{labels,datasets:[
-    {label:'Inkomsten',data:incArr,borderColor:greysLight()[0],backgroundColor:'transparent',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:greysLight()[0]},
-    {label:'Uitgaven', data:expArr,borderColor:greysLight()[3],backgroundColor:'transparent',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:greysLight()[3]}
+    {label:'Inkomsten',data:incArr,borderColor:soortKleur('saved'),backgroundColor:'transparent',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:soortKleur('saved')},
+    {label:'Uitgaven', data:expArr,borderColor:soortKleur('expense'),backgroundColor:'transparent',tension:0.4,fill:true,pointRadius:ptRadius,pointBackgroundColor:soortKleur('expense')}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
-  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:greysLight()[0]},{label:'Uitgaven',color:greysLight()[3]}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
+  document.getElementById('incExpLegend').innerHTML=[{label:'Inkomsten',color:soortKleur('income')},{label:'Uitgaven',color:soortKleur('expense')}].map(l=>`<span class="legend-item"><span class="legend-dot" style="background:${l.color}"></span>${l.label}</span>`).join('');
 
   // ── Categorie trend ──
   const topCats=Object.entries(state.transactions.filter(t=>t.type==='expense').reduce((a,t)=>{a[t.cat]=(a[t.cat]||0)+t.amt;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k])=>k);
   const ctx2=document.getElementById('catTrendChart').getContext('2d');
   if(charts.catTrend)charts.catTrend.destroy();
-  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:greysLight()[topCats.indexOf(cat) % 8],backgroundColor:'transparent',tension:0.4,pointRadius:ptRadius}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.catTrend=new Chart(ctx2,{type:'line',data:{labels,datasets:topCats.map(cat=>({label:cat,data:periods.map(p=>Math.round(state.transactions.filter(t=>t.type==='expense'&&t.cat===cat&&p.match(t)).reduce((a,t)=>a+t.amt,0))),borderColor:catColor(cat),backgroundColor:'transparent',tension:0.4,pointRadius:ptRadius}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   // ── Spaarquote ──
   const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
   const ctx3=document.getElementById('savingsRateChart').getContext('2d');
   if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{plugins:[segmentedBars],type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?greysLight()[0]:v>=0?greysLight()[3]:greysLight()[5]),borderRadius:0,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+  charts.savRate=new Chart(ctx3,{plugins:[segmentedBars],type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?soortKleur('income'):v>=0?soortKleur('saved'):soortKleur('expense')),borderRadius:0,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
 
   // ── Weekdag patroon ──
   const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
@@ -2664,7 +2682,7 @@ function renderAnalytics(){
   const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
   const ctx4=document.getElementById('weekdayChart').getContext('2d');
   if(charts.weekday)charts.weekday.destroy();
-  charts.weekday=new Chart(ctx4,{plugins:[segmentedBars],type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?greysLight()[0]:greysLight()[4]),borderRadius:0,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.weekday=new Chart(ctx4,{plugins:[segmentedBars],type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?soortKleur('expense'):doorzichtig(soortKleur('expense'),0.42)),borderRadius:0,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   renderYearReport();
 }
@@ -3215,7 +3233,7 @@ async function syncFromSheets() {
     if (goalRows.length > 1) {
       state.goals = goalRows.slice(1).filter(r=>r[0]).map(r=>({
         id:Number(r[0]), name:r[1]||'', target:parseFloat(r[2])||0,
-        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#FAFAFA'
+        saved:parseFloat(r[3])||0, date:r[4]||'', color:r[5]||'#7C9CFF'
       }));
     }
 
@@ -3223,7 +3241,7 @@ async function syncFromSheets() {
     if (savAccRows.length > 1) {
       state.savings.accounts = savAccRows.slice(1).filter(r=>r[0]).map(r=>({
         id:Number(r[0]), name:r[1]||'', balance:parseFloat(r[2])||0,
-        target:parseFloat(r[3])||0, color:r[4]||'#FAFAFA', note:r[5]||''
+        target:parseFloat(r[3])||0, color:r[4]||'#3DD68C', note:r[5]||''
       }));
     }
 
