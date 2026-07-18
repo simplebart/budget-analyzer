@@ -1905,44 +1905,97 @@ function renderFunnel() {
   const weg  = tx.filter(t => t.type === 'transfer' && transferDirection(t) === 'out').reduce((a,t) => a+t.amt, 0);
 
   const stappen = [
-    { label:'Binnengekomen', waarde: inkomen,                        hap: 0    },
-    { label:'Na vaste lasten', waarde: inkomen - vast,               hap: vast },
-    { label:'Na dagelijks',    waarde: inkomen - vast - vrij,        hap: vrij },
-    { label:'Na wegzetten',    waarde: inkomen - vast - vrij - weg,  hap: weg  },
+    { label:'Binnen',      waarde: inkomen,                       hap:0,    hapLabel:'' },
+    { label:'Na vast',     waarde: inkomen - vast,                hap:vast, hapLabel:'vaste lasten' },
+    { label:'Na dagelijks',waarde: inkomen - vast - vrij,         hap:vrij, hapLabel:'dagelijkse uitgaven' },
+    { label:'Over',        waarde: inkomen - vast - vrij - weg,   hap:weg,  hapLabel:'naar spaarpotten' },
   ];
 
-  if (sub) sub.textContent = `${fmt(inkomen)} binnen`;
+  const over    = stappen[stappen.length - 1].waarde;
+  const tekort  = over < 0;
+  if (sub) sub.textContent = `${Math.round((Math.max(0,over)/inkomen)*100)}% van ${fmt(inkomen)} blijft over`;
 
-  el.innerHTML = stappen.map((s, i) => {
-    const laat = i === stappen.length - 1;
-    const tekort = s.waarde < 0;
-    const pct = Math.max(0, Math.min(100, (s.waarde / inkomen) * 100));
+  /* ── De stroomvorm ──
+     Elke etappe versmalt van zijn eigen hoogte naar die van de volgende,
+     via een vloeiende bocht. Achter de vorm ligt een lichtere echo, zodat
+     de stroom diepte krijgt zoals bij een rivier op een kaart. */
+  const W = 520, H = 190;
+  const padTop = 34;                       // ruimte voor de bedragen
+  const maxH   = H - padTop - 16;
+  const n      = stappen.length;
+  const sw     = W / n;                    // breedte per etappe
+  const midY   = padTop + maxH / 2;
 
-    /* Gaat de laatste stap onder nul, dan heb je meer weggezet dan er deze
-       cyclus binnenkwam — het verschil kwam uit je buffer. Dat is geen fout
-       maar een keuze, en die verdient een eerlijk label in plaats van een
-       lege balk met 0%. */
-    const balk = tekort
-      ? `<div class="fun-track short">
-           <div class="fun-fill deficit" style="width:100%"></div>
-           <span class="fun-pct">uit je buffer</span>
-         </div>`
-      : `<div class="fun-track">
-           <div class="fun-fill" style="width:${pct}%"></div>
-           <span class="fun-pct">${Math.round(pct)}%</span>
-         </div>`;
+  const hoogte = v => Math.max(3, (Math.max(0, v) / inkomen) * maxH);
+  const grijs  = greysLight();
+  const tinten = [grijs[1], grijs[2], grijs[3], grijs[4]];
 
-    return `<div class="fun-step ${laat ? 'last' : ''}">
-      <div class="fun-top">
-        <span class="fun-label">${s.label}</span>
-        <span class="fun-val ${tekort ? 'neg' : ''}">${tekort ? '−' : ''}${fmt(Math.abs(s.waarde))}</span>
-      </div>
-      ${balk}
-      ${s.hap > 0 ? `<div class="fun-cut">− ${fmt(s.hap)} ${
-        i === 1 ? 'vaste lasten' : i === 2 ? 'dagelijkse uitgaven' : 'naar spaarpotten'
-      }</div>` : ''}
-    </div>`;
+  // Eén etappe als gesloten pad: bovenrand heen, onderrand terug
+  const etappe = (i, schaal) => {
+    const h0 = hoogte(stappen[i].waarde) * schaal;
+    const h1 = hoogte(i + 1 < n ? stappen[i+1].waarde : stappen[i].waarde) * schaal;
+    const x0 = i * sw, x1 = (i + 1) * sw;
+    const c  = sw * 0.42;                  // hoe rond de bocht loopt
+
+    const t0 = midY - h0/2, t1 = midY - h1/2;
+    const b0 = midY + h0/2, b1 = midY + h1/2;
+
+    return `M ${x0} ${t0}
+            C ${x0+c} ${t0}, ${x1-c} ${t1}, ${x1} ${t1}
+            L ${x1} ${b1}
+            C ${x1-c} ${b1}, ${x0+c} ${b0}, ${x0} ${b0} Z`;
+  };
+
+  const echo  = stappen.map((_, i) => `<path d="${etappe(i, 1.22)}" fill="${grijs[0]}" opacity="0.10"/>`).join('');
+  const vorm  = stappen.map((_, i) => `<path d="${etappe(i, 1)}" fill="${tinten[i]}"/>`).join('');
+
+  // Scheidingen tussen de etappes
+  const lijnen = stappen.slice(1).map((_, i) => {
+    const x = (i + 1) * sw;
+    return `<line x1="${x}" y1="${padTop - 26}" x2="${x}" y2="${H}"
+             stroke="${state.settings.theme === 'light' ? '#FFFFFF' : '#000000'}" stroke-width="2"/>`;
   }).join('');
+
+  // Bedragen boven elke etappe
+  const bedragen = stappen.map((s, i) => {
+    const x = i * sw + sw / 2;
+    const neg = s.waarde < 0;
+    return `<text x="${x}" y="${padTop - 12}" class="fun-amt ${neg ? 'neg' : ''}"
+             text-anchor="middle">${neg ? '−' : ''}${fmt(Math.abs(s.waarde))}</text>`;
+  }).join('');
+
+  // Percentages als pil in het hart van de stroom
+  const pillen = stappen.map((s, i) => {
+    const x   = i * sw + sw / 2;
+    const pct = Math.round((Math.max(0, s.waarde) / inkomen) * 100);
+    const tekst = s.waarde < 0 ? 'tekort' : pct + '%';
+    const bw  = tekst.length * 7 + 16;
+    return `<g>
+      <rect x="${x - bw/2}" y="${midY - 10}" width="${bw}" height="20" rx="10"
+            fill="${state.settings.theme === 'light' ? '#171717' : '#FAFAFA'}"/>
+      <text x="${x}" y="${midY + 4}" class="fun-pill" text-anchor="middle">${tekst}</text>
+    </g>`;
+  }).join('');
+
+  // Wat er in elke etappe afging
+  const bijschrift = stappen.map((s, i) => {
+    if (!s.hap) return '';
+    const x = i * sw + sw / 2;
+    return `<text x="${x}" y="${H - 2}" class="fun-cut-lbl" text-anchor="middle">− ${fmt(s.hap)}</text>`;
+  }).join('');
+
+  el.innerHTML = `
+    <svg class="fun-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+         aria-label="Van je inkomen blijft ${Math.round((Math.max(0,over)/inkomen)*100)} procent over">
+      ${echo}${vorm}${lijnen}${bedragen}${pillen}${bijschrift}
+    </svg>
+    <div class="fun-legend">
+      ${stappen.map((s, i) => `<span class="fun-leg">
+        <span class="fun-leg-name">${s.label}</span>
+        ${s.hapLabel ? `<span class="fun-leg-cut">${s.hapLabel}</span>` : ''}
+      </span>`).join('')}
+    </div>
+    ${tekort ? `<div class="fun-warn">Je zette ${fmt(Math.abs(over))} meer weg dan er deze cyclus binnenkwam — dat kwam uit je buffer.</div>` : ''}`;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2385,6 +2438,41 @@ function chartColors(){
    categorie geen eigen kleur heeft. */
 const PALETTE = ['#FAFAFA', '#D4D4D4', '#A8A8A8', '#858585', '#666666', '#4D4D4D', '#3A3A3A', '#2B2B2B'];
 
+
+/* ═══════════════════════════════════════════════════════════
+   GESEGMENTEERDE STAVEN
+
+   De balken worden niet als blokjes getekend — dat zou tientallen
+   losse datasets kosten. In plaats daarvan tekent Chart.js gewoon
+   massieve staven, en verven wij er achteraf horizontale strepen
+   in de achtergrondkleur overheen. Eén doorlopend raster over de
+   hele grafiek, dus de segmenten liggen netjes op één lijn.
+   ═══════════════════════════════════════════════════════════ */
+const segmentedBars = {
+  id: 'segmentedBars',
+  afterDatasetsDraw(chart) {
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+
+    const { top, bottom, left, right } = chartArea;
+    const bg   = state.settings.theme === 'light' ? '#FFFFFF' : '#000000';
+    const stap = 7;    // hoogte van één segment plus de naad
+    const naad = 2.5;  // dikte van de naad
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, top, right - left, bottom - top);
+    ctx.clip();
+    ctx.fillStyle = bg;
+
+    // Van onderaf, zodat de segmenten op de nullijn uitlijnen
+    for (let y = bottom - stap; y > top; y -= stap) {
+      ctx.fillRect(left, y, right - left, naad);
+    }
+    ctx.restore();
+  }
+};
+
 function renderCashflowChart(){
   const { grid, text } = chartColors();
   const cycles = getLastNCycles(6);
@@ -2404,9 +2492,9 @@ function renderCashflowChart(){
   const toonSaldo = hasBankSetup() && saldoLijn.some(v => v !== null);
 
   const datasets = [
-    { type:'bar', label:'Binnen',   data:incD, backgroundColor:greysLight()[0],  borderRadius:5, borderSkipped:false, order:2 },
-    { type:'bar', label:'Eruit',    data:expD, backgroundColor:greysLight()[3],  borderRadius:5, borderSkipped:false, order:2 },
-    { type:'bar', label:'Weggezet', data:traD, backgroundColor:greysLight()[5], borderRadius:5, borderSkipped:false, order:2 },
+    { type:'bar', label:'Binnen',   data:incD, backgroundColor:greysLight()[0],  borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
+    { type:'bar', label:'Eruit',    data:expD, backgroundColor:greysLight()[3],  borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
+    { type:'bar', label:'Weggezet', data:traD, backgroundColor:greysLight()[5], borderRadius:0, borderSkipped:false, order:2, barPercentage:0.92, categoryPercentage:0.86 },
   ];
 
   if (toonSaldo) {
@@ -2433,6 +2521,7 @@ function renderCashflowChart(){
 
   charts.cashflow = new Chart(ctx, {
     data: { labels: months, datasets },
+    plugins: [segmentedBars],
     options: {
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
@@ -2567,7 +2656,7 @@ function renderAnalytics(){
   const savRates=periods.map(p=>{const inc=state.transactions.filter(t=>t.type==='income'&&p.match(t)).reduce((a,t)=>a+t.amt,0);const exp=state.transactions.filter(t=>t.type==='expense'&&p.match(t)).reduce((a,t)=>a+t.amt,0);return inc>0?Math.round(((inc-exp)/inc)*100):0;});
   const ctx3=document.getElementById('savingsRateChart').getContext('2d');
   if(charts.savRate)charts.savRate.destroy();
-  charts.savRate=new Chart(ctx3,{type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?greysLight()[0]:v>=0?greysLight()[3]:greysLight()[5]),borderRadius:3,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
+  charts.savRate=new Chart(ctx3,{plugins:[segmentedBars],type:'bar',data:{labels,datasets:[{data:savRates,backgroundColor:savRates.map(v=>v>=20?greysLight()[0]:v>=0?greysLight()[3]:greysLight()[5]),borderRadius:0,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.raw+'%'}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:maxTicks}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>v+'%'}}}}});
 
   // ── Weekdag patroon ──
   const wd=new Array(7).fill(0),wc=new Array(7).fill(0);
@@ -2575,7 +2664,7 @@ function renderAnalytics(){
   const wAvg=wd.map((s,i)=>wc[i]>0?Math.round(s/wc[i]):0);
   const ctx4=document.getElementById('weekdayChart').getContext('2d');
   if(charts.weekday)charts.weekday.destroy();
-  charts.weekday=new Chart(ctx4,{type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?greysLight()[0]:greysLight()[4]),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
+  charts.weekday=new Chart(ctx4,{plugins:[segmentedBars],type:'bar',data:{labels:['Ma','Di','Wo','Do','Vr','Za','Zo'],datasets:[{data:wAvg,backgroundColor:wAvg.map((_,i)=>i===wAvg.indexOf(Math.max(...wAvg))?greysLight()[0]:greysLight()[4]),borderRadius:0,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' gem. '+state.settings.currency+c.raw.toLocaleString('nl-NL')}}},scales:{x:{grid:{display:false},ticks:{color:text,font:{size:11}}},y:{grid:{color:grid},ticks:{color:text,font:{size:11},callback:v=>state.settings.currency+v.toLocaleString('nl-NL')}}}}});
 
   renderYearReport();
 }
