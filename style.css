@@ -7,53 +7,59 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* ───────────── TOKENS ─────────────
-   Monochroom. Kleur is voorbehouden aan één ding: of een cijfer de
-   goede of de verkeerde kant op ging. Al het andere is grijswaarde,
-   zodat de data zelf het contrast draagt.
+   Zwart, dicht en strak — dat komt uit de referentie en dat werkt.
+   Maar kleur komt terug waar hij werk doet: om SOORTEN geld uit
+   elkaar te houden. Het meubilair blijft grijs, de data krijgt kleur.
    ───────────────────────────────── */
 :root {
   --ink:      #000000;   /* pagina */
-  --ink-2:    #0A0A0A;   /* kaart */
-  --ink-3:    #141414;   /* inzet / hover */
-  --ink-4:    #1F1F1F;   /* actieve inzet */
-  --edge:     #1C1C1C;   /* rand */
-  --edge-hi:  #2E2E2E;   /* sterke rand */
+  --ink-2:    #0B0B0C;   /* kaart */
+  --ink-3:    #151517;   /* inzet / hover */
+  --ink-4:    #202024;   /* actieve inzet */
+  --edge:     #1D1D20;   /* rand */
+  --edge-hi:  #303036;   /* sterke rand */
 
   --chalk:    #FAFAFA;   /* primaire tekst */
-  --chalk-2:  #A1A1A1;   /* labels */
-  --chalk-3:  #6B6B6B;   /* bijschriften */
+  --chalk-2:  #9E9EA7;   /* labels */
+  --chalk-3:  #66666E;   /* bijschriften */
 
-  /* De enige kleuren in de app: richting van een verandering */
-  --up:       #4ADE80;
-  --down:     #F87171;
+  /* ── De vier soorten geld ── */
+  --income:   #3DD68C;   /* binnen */
+  --expense:  #FF8A5B;   /* eruit — warm, want rood is voor gevaar */
+  --transfer: #7C9CFF;   /* verplaatst */
+  --saved:    #F0B429;   /* over, XP, beloning */
 
-  /* Grijstrap voor grafieken — vijf treden van licht naar donker */
-  --g1: #FAFAFA;
-  --g2: #C4C4C4;
-  --g3: #8A8A8A;
-  --g4: #5A5A5A;
-  --g5: #333333;
+  /* Richting van een verandering */
+  --up:       #3DD68C;
+  --down:     #FF6B6B;
 
-  /* Aliassen die de JS gebruikt — allemaal grijs, behalve op/neer */
+  /* Categoriepalet — acht tinten die op zwart uit elkaar te houden zijn */
+  --c1: #7C9CFF;  --c2: #3DD68C;  --c3: #FF8A5B;  --c4: #F0B429;
+  --c5: #E879C7;  --c6: #4ECDC4;  --c7: #A78BFA;  --c8: #FF6B6B;
+
+  /* Grijstrap voor neutraal meubilair */
+  --g1: #FAFAFA;  --g2: #C4C4C4;  --g3: #8A8A8A;
+  --g4: #5A5A5A;  --g5: #333333;
+
+  /* Aliassen die de JS gebruikt */
   --bg: var(--ink);  --bg2: var(--ink-2);  --bg3: var(--ink-3);
   --text: var(--chalk);  --text2: var(--chalk-2);  --text3: var(--chalk-3);
   --border: var(--edge);  --border-strong: var(--edge-hi);
-  --accent: var(--chalk);  --accent-dim: rgba(250,250,250,0.08);  --accent-dim2: var(--ink-4);
-  --green: var(--up);  --red: var(--down);  --amber: var(--g2);  --purple: var(--g3);
+  --accent: var(--transfer);  --accent-dim: rgba(124,156,255,0.12);  --accent-dim2: var(--ink-4);
+  --green: var(--income);  --red: var(--expense);
+  --amber: var(--saved);   --purple: var(--transfer);
 
-  --gold: var(--g2);      --gold-dim: rgba(196,196,196,0.10);
-  --jade: var(--up);      --jade-dim: rgba(74,222,128,0.10);
-  --ember: var(--down);   --ember-dim: rgba(248,113,113,0.10);
-  --lilac: var(--g2);     --lilac-dim: rgba(196,196,196,0.10);
+  --gold: var(--saved);      --gold-dim: rgba(240,180,41,0.12);
+  --jade: var(--income);     --jade-dim: rgba(61,214,140,0.12);
+  --ember: var(--expense);   --ember-dim: rgba(255,138,91,0.12);
+  --lilac: var(--transfer);  --lilac-dim: rgba(124,156,255,0.12);
 
   --font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --font-body:    'Inter', system-ui, -apple-system, sans-serif;
 
-  /* Strak, zoals de referentie: kleine radii, geen zachte hoeken */
   --r-sm: 6px;  --r: 8px;  --r-lg: 10px;  --r-xl: 12px;
   --radius: var(--r);  --radius-lg: var(--r-lg);
 
-  /* Vlak. Geen zwevende kaarten, alleen randen. */
   --lift-1: none;
   --lift-2: none;
   --lift-3: 0 24px 60px rgba(0,0,0,0.85);
@@ -70,25 +76,33 @@
 [data-theme="light"] {
   --ink:      #FFFFFF;
   --ink-2:    #FAFAFA;
-  --ink-3:    #F2F2F2;
-  --ink-4:    #E8E8E8;
-  --edge:     #E8E8E8;
-  --edge-hi:  #D4D4D4;
+  --ink-3:    #F2F2F4;
+  --ink-4:    #E8E8EC;
+  --edge:     #E7E7EB;
+  --edge-hi:  #D2D2D9;
 
-  --chalk:    #0A0A0A;
-  --chalk-2:  #525252;
-  --chalk-3:  #8A8A8A;
+  --chalk:    #0A0A0B;
+  --chalk-2:  #56565E;
+  --chalk-3:  #8A8A93;
 
-  --up:       #16A34A;
-  --down:     #DC2626;
+  --income:   #12A05F;
+  --expense:  #D96A2E;
+  --transfer: #4A6BD6;
+  --saved:    #B8860B;
+
+  --up:       #12A05F;
+  --down:     #D93838;
+
+  --c1: #4A6BD6;  --c2: #12A05F;  --c3: #D96A2E;  --c4: #B8860B;
+  --c5: #C2479B;  --c6: #199B93;  --c7: #7B5BD6;  --c8: #D93838;
 
   --g1: #171717;  --g2: #525252;  --g3: #8A8A8A;  --g4: #B8B8B8;  --g5: #E0E0E0;
 
-  --gold-dim: rgba(82,82,82,0.08);
-  --jade-dim: rgba(22,163,74,0.09);
-  --ember-dim:rgba(220,38,38,0.09);
-  --lilac-dim:rgba(82,82,82,0.08);
-  --accent-dim: rgba(10,10,10,0.06);
+  --gold-dim: rgba(184,134,11,0.12);
+  --jade-dim: rgba(18,160,95,0.12);
+  --ember-dim:rgba(217,106,46,0.12);
+  --lilac-dim:rgba(74,107,214,0.12);
+  --accent-dim: rgba(74,107,214,0.10);
 
   --lift-3: 0 24px 60px rgba(0,0,0,0.18);
 }
@@ -3771,14 +3785,14 @@ body.app-locked .pin-screen { visibility: visible; }
 
 /* De meter wordt strakker en verliest zijn gloed */
 .board-meter { height: 16px; border-radius: 5px; }
-.board-meter-fill { background: var(--chalk) !important; border-radius: 2px; }
+.board-meter-fill { border-radius: 2px; }
 .board-meter::after { border-radius: 2px; }
 .board-meter-today { background: var(--chalk); box-shadow: none; height: 22px; }
 
 /* Het dagbudget: geen kleurcodering meer, alleen een getal */
 .today { border-radius: var(--r); padding: 12px 14px; }
-.today-amt { font-size: 20px; color: var(--chalk) !important; }
-.today-fill { background: var(--chalk) !important; }
+.today-amt { font-size: 20px; }
+
 .today-rail { border-radius: 3px; }
 
 /* ── KPI-strip ── */
@@ -3788,45 +3802,29 @@ body.app-locked .pin-screen { visibility: visible; }
 .kpi-delta.bad  { color: var(--down); }
 
 /* Kleur alleen voor richting: de KPI-waarde zelf is altijd wit */
-.kpi-num[style] { color: var(--chalk) !important; }
+
 
 /* ── Trechter: één grijstint, geen verloop ── */
 .fun-val   { font-size: 13px; }
 
 /* ── Kalender: grijstrap in plaats van rood ── */
-.heat-cell.s1 { background: #262626; border-color: transparent; }
-.heat-cell.s2 { background: #454545; border-color: transparent; }
-.heat-cell.s3 { background: #7A7A7A; border-color: transparent; }
-.heat-cell.s4 { background: #FAFAFA; border-color: transparent; }
+/* Vier treden in de uitgavenkleur: hoe donkerder het vak, hoe meer eruit ging */
+.heat-cell.s1 { background: color-mix(in srgb, var(--expense) 26%, var(--ink)); border-color: transparent; }
+.heat-cell.s2 { background: color-mix(in srgb, var(--expense) 48%, var(--ink)); border-color: transparent; }
+.heat-cell.s3 { background: color-mix(in srgb, var(--expense) 72%, var(--ink)); border-color: transparent; }
+.heat-cell.s4 { background: var(--expense); border-color: transparent; }
 .heat-cell.now { box-shadow: 0 0 0 1.5px var(--chalk); }
 
-[data-theme="light"] .heat-cell.s1 { background: #E5E5E5; }
-[data-theme="light"] .heat-cell.s2 { background: #B8B8B8; }
-[data-theme="light"] .heat-cell.s3 { background: #6E6E6E; }
-[data-theme="light"] .heat-cell.s4 { background: #171717; }
 
-/* ── Bedragen: wit, met een teken dat de richting draagt ── */
-.tx-amount.income, .tx-amount.expense, .tx-amount.transfer,
-.tx-mini-amt, .cat-breakdown-amt, .cmp-amt,
-.savings-acc-balance, .donut-leg-amt, .year-topcat-amt {
-  color: var(--chalk) !important;
-}
-.tx-amount.expense, .tx-amount.transfer { opacity: 0.72; }
-
-/* Behalve waar het een verandering betreft */
-.cmp-delta.up   { color: var(--down); }
-.cmp-delta.down { color: var(--up); }
-.compare-arrow.better, .compare-delta[style*="green"] { color: var(--up); }
-.compare-arrow.worse                                  { color: var(--down); }
 
 /* ── Voortgangsbalken: wit op zwart ── */
-.budget-bar-fill, .goal-bar-fill, .cat-breakdown-bar,
-.kpi-bar, .income-bar, .expense-bar,
+/* Voortgang draagt de kleur van waar hij over gaat */
 .adv-xp-fill, .player-xp-fill, .hud-xp-fill, .level-progress-fill {
-  background: var(--chalk) !important;
+  background: var(--saved) !important;
   box-shadow: none !important;
 }
-.cmp-bar.nu  { background: var(--chalk) !important; }
+.income-bar  { background: var(--income); }
+.expense-bar { background: var(--expense); }
 .cmp-bar.was { background: var(--g5); }
 
 /* Budgetkaarten: de rand geeft de staat, in grijs behalve bij overschrijding */
@@ -3842,7 +3840,7 @@ body.app-locked .pin-screen { visibility: visible; }
 }
 .player:hover { background: var(--ink-3); }
 .player-crest {
-  background: var(--ink-3);
+  background: rgba(240,180,41,0.10);
   border-color: var(--edge-hi);
   box-shadow: none;
   border-radius: var(--r-sm);
@@ -3850,23 +3848,23 @@ body.app-locked .pin-screen { visibility: visible; }
 .player-title { font-size: 14px; font-weight: 600; }
 .player-lvl   { color: var(--chalk-3); }
 .player-xp-num { color: var(--chalk-3); }
-.hud-pip.on { background: var(--chalk); box-shadow: none; }
+.hud-pip.on { background: var(--income); box-shadow: none; }
 
 .nav-item.active { background: var(--ink-3); }
-.nav-item.active::before { background: var(--chalk); }
+.nav-item.active::before { background: var(--transfer); }
 .nav-item { font-size: 13px; font-weight: 500; padding: 8px 11px; }
 .sidebar { border-radius: var(--r-lg); top: 12px; left: 12px; bottom: 12px; width: 208px; }
 
 /* ── Knoppen: vlak ── */
 .btn-primary, .btn-primary-sm {
-  background: var(--chalk);
-  color: var(--ink);
-  border-color: var(--chalk);
+  background: var(--transfer);
+  color: #fff;
+  border-color: var(--transfer);
   box-shadow: none;
 }
 .btn-primary:hover, .btn-primary-sm:hover {
-  background: var(--chalk-2);
-  border-color: var(--chalk-2);
+  background: color-mix(in srgb, var(--transfer) 84%, #fff);
+  border-color: color-mix(in srgb, var(--transfer) 84%, #fff);
   transform: none;
   box-shadow: none;
 }
@@ -3874,9 +3872,9 @@ body.app-locked .pin-screen { visibility: visible; }
 .btn-secondary:hover { transform: none; }
 .pill { padding: 5px 12px; font-size: 12px; font-weight: 500; }
 .pill.active {
-  background: var(--chalk);
-  color: var(--ink);
-  border-color: var(--chalk);
+  background: var(--transfer);
+  color: #fff;
+  border-color: var(--transfer);
   box-shadow: none;
 }
 
@@ -3889,23 +3887,23 @@ body.app-locked .pin-screen { visibility: visible; }
 
 /* ── Missie en avontuur: monochroom ── */
 .adv-mission-card.on-track { background: var(--ink-2); border-color: var(--edge-hi); }
-.adv-mission-desc  { border-left-color: var(--chalk); }
+.adv-mission-desc  { border-left-color: var(--transfer); }
 .adv-mission-status.good { color: var(--up);   background: var(--jade-dim); }
 .adv-mission-status.bad  { color: var(--chalk-2); background: var(--ink-3); }
-.adv-step-dot.filled { background: var(--chalk) !important; box-shadow: none; }
+.adv-step-dot.filled { background: var(--income) !important; box-shadow: none; }
 .board-quest-state.good { color: var(--up);     background: var(--jade-dim); }
 .board-quest-state.bad  { color: var(--chalk-2); background: var(--ink-3); }
 .board-quest-eyebrow    { color: var(--chalk-3); }
 #advLevel { background: var(--ink-2); border-color: var(--edge); }
-.adv-level-icon { background: var(--ink-3); border-color: var(--edge-hi); box-shadow: none; }
-.adv-level-xp   { color: var(--chalk); }
+.adv-level-icon { background: rgba(240,180,41,0.10); border-color: color-mix(in srgb, var(--saved) 35%, transparent); box-shadow: none; }
+.adv-level-xp   { color: var(--saved); }
 .adv-path-stop.current .adv-path-marker {
   background: var(--chalk); border-color: var(--chalk); box-shadow: none;
 }
 .adv-path-stop.past .adv-path-marker { border-color: var(--g4); background: var(--ink-3); }
 .adv-path-stop.past::before, .adv-path-stop.current::before { background: var(--g4); }
 .adv-path-you { background: var(--ink-3); border-color: var(--edge-hi); color: var(--chalk-2); }
-.adv-city-emoji { filter: grayscale(1); }
+
 .adv-city-note  { background: var(--ink-3); border-color: var(--edge); color: var(--chalk-3); }
 .coach-card { border-left-color: var(--edge-hi); }
 .money-story-card { background: var(--ink-2); }
@@ -3913,13 +3911,7 @@ body.app-locked .pin-screen { visibility: visible; }
 .gap-title { color: var(--chalk); }
 .today:has(.gap) { background: var(--ink-2); border-color: var(--edge-hi); }
 
-/* ── Emoji ontkleuren, zodat ze de grijstoon niet breken ── */
-.cat-manage-emoji, .insight-icon, .coach-tip-icon, .money-story-icon,
-.gap-icon, .year-month-icon, .empty-icon, .dash-mis-icon,
-.adv-mission-icon, .adv-hist-icon, .mobile-quick-icon, .coach-icon,
-.player-crest, .hud-crest, .adv-path-icon, .board-quest-icon {
-  filter: grayscale(1);
-}
+
 
 /* ═══════════════════════════════════════════════════════════
    DE TRECHTER — waar je inkomen onderweg blijft hangen
