@@ -1780,6 +1780,228 @@ function renderCoach() {
 /* ═══════════════════════════════════════════════
    RENDER DASHBOARD
    ═══════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════
+   SPARKLINE — een verloop van een paar pixels hoog
+
+   Inline SVG in plaats van Chart.js: op dit formaat is een canvas
+   zonde van het geheugen, en SVG blijft scherp op elk scherm.
+   ═══════════════════════════════════════════════════════════ */
+function sparkline(waarden, kleur) {
+  const n = waarden.length;
+  if (!n) return '';
+
+  const max = Math.max(...waarden, 1);
+  const W = 64, H = 22, gap = 2;
+  const bw = (W - gap * (n - 1)) / n;
+
+  const staven = waarden.map((v, i) => {
+    const h = Math.max(1.5, (v / max) * H);
+    const x = i * (bw + gap);
+    const y = H - h;
+    // De laatste staaf is 'nu' — die krijgt volle kleur, de rest dempt weg
+    const op = i === n - 1 ? 1 : 0.28 + (i / n) * 0.32;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}"
+             rx="1" fill="${kleur}" opacity="${op.toFixed(2)}"/>`;
+  }).join('');
+
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+            width="${W}" height="${H}" aria-hidden="true">${staven}</svg>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DE KPI-STRIP — vier waarden, elk met verloop en vergelijking
+
+   Een getal zonder context zegt weinig: is €1.494 aan uitgaven veel?
+   Naast de vorige cyclus, met het verloop van een half jaar ernaast,
+   zegt het alles.
+   ═══════════════════════════════════════════════════════════ */
+function renderKpiStrip() {
+  const el = document.getElementById('kpis');
+  if (!el) return;
+
+  const cycli = getLastNCycles(6);
+  const som = (c, filter) =>
+    state.transactions.filter(t => c.match(t) && filter(t)).reduce((a, t) => a + t.amt, 0);
+
+  const reeks = {
+    in:  cycli.map(c => som(c, t => t.type === 'income')),
+    uit: cycli.map(c => som(c, t => t.type === 'expense')),
+    weg: cycli.map(c => som(c, t => t.type === 'transfer' && transferDirection(t) === 'out')),
+  };
+  reeks.over = cycli.map((_, i) => reeks.in[i] - reeks.uit[i]);
+
+  const laatste = a => a[a.length - 1] || 0;
+  const vorige  = a => a.length > 1 ? a[a.length - 2] : 0;
+
+  const kaarten = [
+    { sleutel:'in',   label:'Binnen',   kleur:'var(--jade)',  hex:'#2FCB8B', omlaagIsGoed:false },
+    { sleutel:'uit',  label:'Eruit',    kleur:'var(--ember)', hex:'#FF6A4D', omlaagIsGoed:true  },
+    { sleutel:'weg',  label:'Weggezet', kleur:'var(--lilac)', hex:'#8B7FF7', omlaagIsGoed:false },
+    { sleutel:'over', label:'Over',     kleur:'var(--gold)',  hex:'#E9A83C', omlaagIsGoed:false },
+  ];
+
+  el.innerHTML = kaarten.map(k => {
+    const nu  = laatste(reeks[k.sleutel]);
+    const was = vorige(reeks[k.sleutel]);
+    const d   = nu - was;
+
+    let delta = '';
+    if (was > 0 || nu > 0) {
+      const pct = was > 0 ? Math.round((d / Math.abs(was)) * 100) : null;
+      const omhoog = d > 0;
+      // Groen betekent 'goede kant op' — bij uitgaven is dat omlaag
+      const goed = k.omlaagIsGoed ? !omhoog : omhoog;
+      const cls  = Math.abs(d) < 0.5 ? 'flat' : goed ? 'good' : 'bad';
+      const pijl = Math.abs(d) < 0.5 ? '→' : omhoog ? '↑' : '↓';
+      const tekst = pct !== null ? `${Math.abs(pct)}%` : fmt(Math.abs(d));
+      delta = `<span class="kpi-delta ${cls}">${pijl} ${tekst}</span>
+               <span class="kpi-vs">vs vorige cyclus</span>`;
+    }
+
+    return `<div class="kpi">
+      <div class="kpi-head">
+        <span class="kpi-name">${k.label}</span>
+        ${sparkline(reeks[k.sleutel], k.hex)}
+      </div>
+      <div class="kpi-num" style="color:${k.sleutel === 'over' ? k.kleur : 'var(--chalk)'}">${fmt(nu)}</div>
+      <div class="kpi-foot">${delta}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DE TRECHTER — waar je inkomen onderweg blijft hangen
+
+   Van alles wat binnenkwam, hoeveel overleeft de vaste lasten? En
+   daarna de boodschappen? Wat er onderaan uit komt, is wat je echt
+   overhield. Elke versmalling is een hap.
+   ═══════════════════════════════════════════════════════════ */
+function renderFunnel() {
+  const el  = document.getElementById('funnel');
+  const sub = document.getElementById('funnelSub');
+  if (!el) return;
+
+  const tx = getCurrentMonthTx();
+  const inkomen = tx.filter(t => t.type === 'income').reduce((a, t) => a + t.amt, 0);
+
+  if (inkomen <= 0) {
+    el.innerHTML = '<div class="empty-state">Nog geen inkomsten deze cyclus.</div>';
+    if (sub) sub.textContent = '';
+    return;
+  }
+
+  const VAST = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening'];
+  const vast = tx.filter(t => t.type === 'expense' && VAST.includes(t.cat)).reduce((a,t) => a+t.amt, 0);
+  const vrij = tx.filter(t => t.type === 'expense' && !VAST.includes(t.cat)).reduce((a,t) => a+t.amt, 0);
+  const weg  = tx.filter(t => t.type === 'transfer' && transferDirection(t) === 'out').reduce((a,t) => a+t.amt, 0);
+
+  const stappen = [
+    { label:'Binnengekomen', waarde: inkomen,                        hap: 0    },
+    { label:'Na vaste lasten', waarde: inkomen - vast,               hap: vast },
+    { label:'Na dagelijks',    waarde: inkomen - vast - vrij,        hap: vrij },
+    { label:'Na wegzetten',    waarde: inkomen - vast - vrij - weg,  hap: weg  },
+  ];
+
+  if (sub) sub.textContent = `${fmt(inkomen)} binnen`;
+
+  el.innerHTML = stappen.map((s, i) => {
+    const laat = i === stappen.length - 1;
+    const tekort = s.waarde < 0;
+    const pct = Math.max(0, Math.min(100, (s.waarde / inkomen) * 100));
+
+    /* Gaat de laatste stap onder nul, dan heb je meer weggezet dan er deze
+       cyclus binnenkwam — het verschil kwam uit je buffer. Dat is geen fout
+       maar een keuze, en die verdient een eerlijk label in plaats van een
+       lege balk met 0%. */
+    const balk = tekort
+      ? `<div class="fun-track short">
+           <div class="fun-fill deficit" style="width:100%"></div>
+           <span class="fun-pct">uit je buffer</span>
+         </div>`
+      : `<div class="fun-track">
+           <div class="fun-fill" style="width:${pct}%"></div>
+           <span class="fun-pct">${Math.round(pct)}%</span>
+         </div>`;
+
+    return `<div class="fun-step ${laat ? 'last' : ''}">
+      <div class="fun-top">
+        <span class="fun-label">${s.label}</span>
+        <span class="fun-val ${tekort ? 'neg' : ''}">${tekort ? '−' : ''}${fmt(Math.abs(s.waarde))}</span>
+      </div>
+      ${balk}
+      ${s.hap > 0 ? `<div class="fun-cut">− ${fmt(s.hap)} ${
+        i === 1 ? 'vaste lasten' : i === 2 ? 'dagelijkse uitgaven' : 'naar spaarpotten'
+      }</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DE KALENDER — elke dag van de cyclus als vakje
+
+   Donkerder is meer uitgegeven. Zo zie je in één blik je patroon:
+   pieken rond het weekend, stille periodes, de dag dat de huur ging.
+   ═══════════════════════════════════════════════════════════ */
+function renderHeatmap() {
+  const el  = document.getElementById('heat');
+  const sub = document.getElementById('heatSub');
+  if (!el) return;
+
+  const { start, end } = getCurrentCycleRange();
+  const vandaag = today();
+
+  // Alle dagen van de cyclus, met wat er die dag uitging
+  const dagen = [];
+  let d = new Date(start);
+  while (d <= end) {
+    const ds = dateToStr(d);
+    dagen.push({
+      datum: ds,
+      dag: d.getDate(),
+      dow: (d.getDay() + 6) % 7,          // ma = 0
+      bedrag: state.transactions
+        .filter(t => t.type === 'expense' && t.date === ds)
+        .reduce((a, t) => a + t.amt, 0),
+      toekomst: ds > vandaag,
+      isVandaag: ds === vandaag,
+    });
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  }
+
+  const geweest = dagen.filter(x => !x.toekomst);
+  const max = Math.max(...geweest.map(x => x.bedrag), 1);
+  const stil = geweest.filter(x => x.bedrag === 0).length;
+
+  if (sub) sub.textContent = `${stil} ${stil === 1 ? 'stille dag' : 'stille dagen'}`;
+
+  // Lege vakjes vooraan, zodat de eerste dag onder de juiste weekdag valt
+  const opvul = Array(dagen[0].dow).fill('<span class="heat-cell pad"></span>').join('');
+
+  const cellen = dagen.map(x => {
+    if (x.toekomst) return `<span class="heat-cell future" title="${x.dag}"></span>`;
+    const f = x.bedrag / max;                       // 0 … 1
+    const stap = x.bedrag === 0 ? 0 : Math.min(4, Math.ceil(f * 4));
+    const t = x.bedrag > 0
+      ? `${x.dag}: ${fmt(x.bedrag)}`
+      : `${x.dag}: niets uitgegeven`;
+    return `<span class="heat-cell s${stap}${x.isVandaag ? ' now' : ''}" title="${t}"></span>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="heat-dows">${['M','D','W','D','V','Z','Z'].map(l => `<span>${l}</span>`).join('')}</div>
+    <div class="heat-grid">${opvul}${cellen}</div>
+    <div class="heat-legend">
+      <span>minder</span>
+      <span class="heat-cell s0"></span>
+      <span class="heat-cell s1"></span>
+      <span class="heat-cell s2"></span>
+      <span class="heat-cell s3"></span>
+      <span class="heat-cell s4"></span>
+      <span>meer</span>
+    </div>`;
+}
+
 function renderDashboard(){
   document.getElementById('sidebarMonth').textContent = cycleLabel();
 
@@ -1827,37 +2049,18 @@ function renderDashboard(){
   document.getElementById('boardDays').textContent  =
     daysLeft === 0 ? 'laatste dag' : `nog ${daysLeft} ${daysLeft === 1 ? 'dag' : 'dagen'}`;
 
-  document.getElementById('boardIn').textContent   = fmt(income);
-  document.getElementById('boardOut').textContent  = fmt(expense);
-  document.getElementById('boardBurn').textContent = fmt(burnDaily);
 
-  /* Het vierde cijfer moet het heldgetal VERKLAREN, niet ermee
-     concurreren. Met een banksaldo is dat 'Weggezet': dan leest de rij
-     als de rekensom eronder —
-         beginsaldo + Binnen − Eruit − Weggezet = je saldo.
-     Zonder banksaldo is er niets te verklaren; dan is het spaar-
-     percentage het nuttigst. */
-  const savedEl  = document.getElementById('boardSaved');
-  const savedLbl = savedEl.previousElementSibling;
 
-  if (hasBank) {
-    const moved = getCurrentMonthTx()
-      .filter(t => t.type === 'transfer' && transferDirection(t) === 'out')
-      .reduce((a, t) => a + t.amt, 0);
 
-    savedEl.textContent = fmt(moved);
-    savedEl.style.color = moved > 0 ? 'var(--lilac)' : '';
-    if (savedLbl) savedLbl.textContent = 'Weggezet';
-    savedEl.title = 'Naar spaarrekeningen en beleggingen — niet uitgegeven, wel van je rekening af';
-  } else {
-    savedEl.textContent = income > 0
-      ? Math.max(0, Math.round((balance / income) * 100)) + '%' : '—';
-    savedEl.style.color = '';
-    if (savedLbl) savedLbl.textContent = 'Gespaard';
-  }
+  /* ── De KPI-strip ── */
+  renderKpiStrip();
 
   /* ── Het dagbudget ── */
   renderToday();
+
+  /* ── Trechter en kalender ── */
+  renderFunnel();
+  renderHeatmap();
 
   /* ── De volgende zet: de missie ── */
   renderBoardQuest();
