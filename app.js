@@ -257,6 +257,8 @@ function openModal(id) {
     _autoCatUserChanged = false; // reset auto-categorisatie flag
     const v = document.getElementById('txFixed');
     if (v) v.checked = false;
+    const d = document.getElementById('txThrough');
+    if (d) d.checked = false;
     toonVasteSchakelaar();
     document.getElementById('txDate').value = today();
     populateCatSelect('txCat');
@@ -301,8 +303,12 @@ let currentTxType = 'income';
 let editingTxId = null;
 
 function toonVasteSchakelaar() {
-  const wrap = document.getElementById('txFixedWrap');
-  if (wrap) wrap.style.display = currentTxType === 'expense' ? '' : 'none';
+  const vast = document.getElementById('txFixedWrap');
+  if (vast) vast.style.display = currentTxType === 'expense' ? '' : 'none';
+
+  // Doorstroom slaat op geld dat binnenkomt of doorgaat, niet op uitgaven
+  const door = document.getElementById('txThroughWrap');
+  if (door) door.style.display = currentTxType === 'expense' ? 'none' : '';
 }
 
 function setTxType(type) {
@@ -347,6 +353,8 @@ function editTx(id) {
   document.getElementById('txNote').value = tx.note || '';
   const vinkje = document.getElementById('txFixed');
   if (vinkje) vinkje.checked = isFixed(tx);
+  const dv = document.getElementById('txThrough');
+  if (dv) dv.checked = !!tx.passthrough;
   populateCatSelect('txCat');
   if (tx.type === 'expense') document.getElementById('txCat').value = tx.cat;
   if (tx.type === 'transfer') {
@@ -444,6 +452,10 @@ function saveTx() {
     : false;
   if (currentTxType === 'expense') rememberFixed(desc, vast);
 
+  const doorstroom = currentTxType !== 'expense'
+    ? !!document.getElementById('txThrough')?.checked
+    : false;
+
   if (editingTxId) {
     // Update existing transaction in place
     const tx = state.transactions.find(t => t.id === editingTxId);
@@ -457,10 +469,11 @@ function saveTx() {
       tx.fromAccount = fromAccount;
       tx.toAccount = toAccount;
       tx.fixed = vast;
+      tx.passthrough = doorstroom;
     }
     showToast('Transactie bijgewerkt', 'success');
   } else {
-    state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount, fixed:vast });
+    state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount, fixed:vast, passthrough:doorstroom });
   }
 
   /* Je logt nu, dus je bent bij tot vandaag. Dat sluit het gat
@@ -1273,7 +1286,7 @@ function saveCycleStart() {
 }
 function exportCSV() {
   const rows=[['Datum','Omschrijving','Categorie','Type','Bedrag','Van','Naar','Notitie']];
-  [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>rows.push([t.date,t.desc,t.cat,t.type,t.amt.toFixed(2),t.fromAccount||'',t.toAccount||'',t.note||'',t.fixed?'1':'']));
+  [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>rows.push([t.date,t.desc,t.cat,t.type,t.amt.toFixed(2),t.fromAccount||'',t.toAccount||'',t.note||'',t.fixed?'1':'',t.passthrough?'1':'']));
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
@@ -1505,6 +1518,29 @@ function dismissGap() {
    die kun je niet opeten. En wil je aan het eind iets overhouden,
    dan wordt dat er ook afgehaald.
    ═══════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════════════════════════════════════════════
+   DOORSTROOM
+
+   Sommig geld komt binnen en gaat dezelfde dag weer weg — vakantiegeld
+   dat rechtstreeks naar de spaarrekening gaat, een teruggave die je
+   meteen doorboekt. Het raakte je rekening, maar het was nooit van jou
+   om te besteden.
+
+   Zulke bedragen tellen wel voor je banksaldo (het geld bewoog echt),
+   maar niet voor de verdeling van je cyclus. Anders lijkt het alsof je
+   een enorm deel van je salaris hebt weggezet, terwijl dat geld nooit
+   uit je salaris kwam.
+   ═══════════════════════════════════════════════════════════ */
+function isPassthrough(t) {
+  return t.passthrough === true;
+}
+
+/* De transacties van deze cyclus die je cyclus écht vormen */
+function getCycleTxSpendable() {
+  return getCurrentMonthTx().filter(t => !isPassthrough(t));
+}
 
 /* ═══════════════════════════════════════════════════════════
    VASTE LASTEN
@@ -2089,8 +2125,12 @@ function renderSplit() {
   const sub = document.getElementById('splitSub');
   if (!el) return;
 
-  const tx      = getCurrentMonthTx();
+  /* Doorstroom laten we hier buiten: dat geld was nooit te verdelen. */
+  const tx      = getCycleTxSpendable();
   const inkomen = tx.filter(t => t.type === 'income').reduce((a,t) => a+t.amt, 0);
+  const doorTx  = getCurrentMonthTx().filter(isPassthrough);
+  const doorOut = doorTx.filter(t => t.type === 'transfer' && transferDirection(t) === 'out')
+                        .reduce((a,t) => a+t.amt, 0);
 
   if (inkomen <= 0 && !tx.length) {
     el.innerHTML = '<div class="empty-state">Nog geen inkomsten deze cyclus.</div>';
@@ -2181,7 +2221,11 @@ function renderSplit() {
         </div>` : ''}
       </div>` : ''}`;
 
-  el.innerHTML = balk + '<div class="split-rows">' + vakken.map(rij).join('') + '</div>';
+  const voet = doorOut > 0
+    ? `<div class="split-door">${fmt(doorOut)} doorstroom niet meegerekend — dat kwam binnen en ging meteen door</div>`
+    : '';
+
+  el.innerHTML = balk + '<div class="split-rows">' + vakken.map(rij).join('') + '</div>' + voet;
 }
 
 function toggleSplit(id) {
