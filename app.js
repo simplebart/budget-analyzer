@@ -27,6 +27,7 @@ let state = {
               checkingName:'', openingBalance:null, openingDate:'', keepTarget:0,
               budgetRhythm:'day', loggedThrough:'' },
   recurring: [],        // [{ id, type, desc, amt, day, cat }]
+  fixedMemory: {},      // genormaliseerde omschrijving → vaste last ja/nee
   adventure: {
     xp: 0,                    // totale ervaring, bepaalt level 1-100
     pathPosition: 0,          // huidige halte op het pad
@@ -254,6 +255,9 @@ function openModal(id) {
   document.getElementById('modal-'+id).classList.add('open');
   if (id==='addTransaction' && !editingTxId) {
     _autoCatUserChanged = false; // reset auto-categorisatie flag
+    const v = document.getElementById('txFixed');
+    if (v) v.checked = false;
+    toonVasteSchakelaar();
     document.getElementById('txDate').value = today();
     populateCatSelect('txCat');
     document.querySelector('#modal-addTransaction .modal-title').textContent = 'Transactie toevoegen';
@@ -296,6 +300,11 @@ function populateCatSelect(id) {
 let currentTxType = 'income';
 let editingTxId = null;
 
+function toonVasteSchakelaar() {
+  const wrap = document.getElementById('txFixedWrap');
+  if (wrap) wrap.style.display = currentTxType === 'expense' ? '' : 'none';
+}
+
 function setTxType(type) {
   currentTxType = type;
   ['income','expense','transfer'].forEach(t => {
@@ -336,6 +345,8 @@ function editTx(id) {
   // Repareer ook de opgeslagen datum als die een tijdstempel bevat
   if (tx.date && tx.date.includes('T')) { tx.date = txDateStr; }
   document.getElementById('txNote').value = tx.note || '';
+  const vinkje = document.getElementById('txFixed');
+  if (vinkje) vinkje.checked = isFixed(tx);
   populateCatSelect('txCat');
   if (tx.type === 'expense') document.getElementById('txCat').value = tx.cat;
   if (tx.type === 'transfer') {
@@ -391,6 +402,21 @@ function initAutoCategory() {
 
   descEl.addEventListener('input', () => {
     if (_autoCatUserChanged || currentTxType !== 'expense') return;
+    // Kennen we deze omschrijving al als vaste last?
+    const vinkje = document.getElementById('txFixed');
+    const hint   = document.getElementById('txFixedHint');
+    if (vinkje && !_autoCatUserChanged) {
+      const onthouden = state.fixedMemory?.[fixKey(descEl.value)];
+      if (onthouden !== undefined) {
+        vinkje.checked = onthouden;
+        if (hint) hint.textContent = onthouden
+          ? 'Eerder als vaste last gemarkeerd'
+          : 'Eerder als vrije uitgave gemarkeerd';
+      } else if (hint) {
+        hint.textContent = 'Telt niet mee in je dagbudget — wordt vooraf gereserveerd';
+      }
+    }
+
     const suggestion = suggestCategory(descEl.value);
     if (suggestion && [...catEl.options].some(o => o.value === suggestion)) {
       catEl.value = suggestion;
@@ -411,6 +437,13 @@ function saveTx() {
   const fromAccount = currentTxType==='transfer' ? document.getElementById('txFromAccount').value.trim() : '';
   const toAccount   = currentTxType==='transfer' ? document.getElementById('txToAccount').value.trim() : '';
 
+  /* De vaste-last-keuze onthouden we per omschrijving, zodat je hem maar
+     één keer hoeft aan te vinken. */
+  const vast = currentTxType === 'expense'
+    ? !!document.getElementById('txFixed')?.checked
+    : false;
+  if (currentTxType === 'expense') rememberFixed(desc, vast);
+
   if (editingTxId) {
     // Update existing transaction in place
     const tx = state.transactions.find(t => t.id === editingTxId);
@@ -423,10 +456,11 @@ function saveTx() {
       tx.cat = cat;
       tx.fromAccount = fromAccount;
       tx.toAccount = toAccount;
+      tx.fixed = vast;
     }
     showToast('Transactie bijgewerkt', 'success');
   } else {
-    state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount });
+    state.transactions.push({ id:Date.now(), type:currentTxType, desc, amt, date, cat, note, fromAccount, toAccount, fixed:vast });
   }
 
   /* Je logt nu, dus je bent bij tot vandaag. Dat sluit het gat
@@ -1239,7 +1273,7 @@ function saveCycleStart() {
 }
 function exportCSV() {
   const rows=[['Datum','Omschrijving','Categorie','Type','Bedrag','Van','Naar','Notitie']];
-  [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>rows.push([t.date,t.desc,t.cat,t.type,t.amt.toFixed(2),t.fromAccount||'',t.toAccount||'',t.note||'']));
+  [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>rows.push([t.date,t.desc,t.cat,t.type,t.amt.toFixed(2),t.fromAccount||'',t.toAccount||'',t.note||'',t.fixed?'1':'']));
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
@@ -1451,18 +1485,110 @@ function dismissGap() {
    die kun je niet opeten. En wil je aan het eind iets overhouden,
    dan wordt dat er ook afgehaald.
    ═══════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════
+   VASTE LASTEN
+
+   Een vaste last is geen dagelijkse keuze. De huur wordt afgeschreven
+   of je nu zuinig leeft of niet. Daarom mag hij je dagbudget niet
+   opeten: hij wordt vooraf gereserveerd, precies zoals je hem in het
+   echt al hebt weggezet in je hoofd.
+
+   De app onthoudt per omschrijving of iets een vaste last is. Eén keer
+   aanvinken bij "Huur" en elke volgende huur wordt herkend.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Omschrijvingen normaliseren, zodat "Albert Heijn 1160" en
+   "ALBERT HEIJN" hetzelfde geheugen delen. */
+function fixKey(desc) {
+  return (desc || '').toLowerCase().trim()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .split(' ').slice(0, 2).join(' ');
+}
+
+/* Categorieën die vrijwel altijd vast zijn — alleen als vangnet voor
+   transacties van vóór deze functie. Wat de gebruiker zelf aanvinkt,
+   wint altijd. */
+const VASTE_CATS = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening'];
+
+function isFixed(t) {
+  if (t.fixed === true)  return true;
+  if (t.fixed === false) return false;
+
+  const onthouden = state.fixedMemory?.[fixKey(t.desc)];
+  if (onthouden !== undefined) return onthouden;
+
+  return VASTE_CATS.includes(t.cat);
+}
+
+/* Onthoud de keuze voor deze omschrijving */
+function rememberFixed(desc, vast) {
+  if (!state.fixedMemory) state.fixedMemory = {};
+  const k = fixKey(desc);
+  if (k) state.fixedMemory[k] = vast;
+}
+
+/* Wat is er al aan vaste lasten uit deze cyclus gegaan? */
+function fixedSpentThisCycle() {
+  return getCurrentMonthTx()
+    .filter(t => t.type === 'expense' && isFixed(t))
+    .reduce((a, t) => a + t.amt, 0);
+}
+
+/* Welke vaste lasten moeten deze cyclus nog komen?
+
+   Twee bronnen. Ten eerste je terugkerende transacties — die weten hun
+   eigen datum. Ten tweede de vaste lasten van vorige cyclus die dit keer
+   nog niet langs zijn geweest; die komen vrijwel zeker nog. */
+function upcomingFixed() {
+  const { start, end } = getCurrentCycleRange();
+  const nu = today();
+  const dezeCyclus = getCurrentMonthTx().filter(t => t.type === 'expense');
+  const alGehad = new Set(dezeCyclus.filter(isFixed).map(t => fixKey(t.desc)));
+
+  const posten = [];
+
+  // 1. Uit de terugkerende transacties
+  (state.recurring || []).filter(r => r.type === 'expense').forEach(r => {
+    const k = fixKey(r.desc);
+    if (alGehad.has(k)) return;
+    let d = new Date(start.getFullYear(), start.getMonth(), Math.min(r.day, 28));
+    if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(r.day, 28));
+    if (d > end) return;
+    const ds = dateToStr(d);
+    if (ds < nu) return;                       // datum al voorbij, kennelijk niet geboekt
+    posten.push({ desc: r.desc, amt: r.amt, datum: ds, bron: 'terugkerend' });
+    alGehad.add(k);
+  });
+
+  // 2. Vaste lasten die vorige cyclus wél kwamen, nu nog niet
+  const vorige = getLastNCycles(2)[0];
+  state.transactions
+    .filter(t => t.type === 'expense' && vorige.match(t) && isFixed(t))
+    .forEach(t => {
+      const k = fixKey(t.desc);
+      if (alGehad.has(k)) return;
+      // Zelfde dag van de maand, maar dan in deze cyclus
+      const dag = parseInt(t.date.slice(8, 10), 10);
+      let d = new Date(start.getFullYear(), start.getMonth(), Math.min(dag, 28));
+      if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(dag, 28));
+      const ds = d > end ? dateToStr(end) : dateToStr(d);
+      posten.push({ desc: t.desc, amt: t.amt, datum: ds, bron: 'vorige cyclus' });
+      alGehad.add(k);
+    });
+
+  return posten;
+}
+
 function computeDailyAllowance() {
   const { start, end } = getCurrentCycleRange();
   const totalDays = getCycleTotalDays();
   const dayNow    = Math.max(1, Math.min(totalDays, getCycleDayProgress()));
   const daysLeft  = Math.max(1, totalDays - dayNow + 1);   // vandaag telt mee
 
-  const weekly = state.settings.budgetRhythm === 'week';
+  const weekly    = state.settings.budgetRhythm === 'week';
   const todayStr0 = today();
-
-  /* Het budget van deze periode moet berekend worden vanaf wat je bij het
-     BEGIN ervan had — niet vanaf je saldo van dit moment. Anders krimpt je
-     budget terwijl de periode loopt, en telt wat je al uitgaf dubbel mee. */
 
   // Grens van de huidige periode: vandaag, of het begin van deze week
   let periodStart = todayStr0;
@@ -1472,46 +1598,45 @@ function computeDailyAllowance() {
     const ma  = new Date(now); ma.setDate(ma.getDate() - dow);
     const maStr = dateToStr(ma);
     const cycleStartStr = dateToStr(start);
-    periodStart = maStr > cycleStartStr ? maStr : cycleStartStr;  // niet vóór de cyclus
+    periodStart = maStr > cycleStartStr ? maStr : cycleStartStr;
   }
 
-  const spentPeriod = state.transactions
-    .filter(t => t.type === 'expense' && t.date >= periodStart && t.date <= todayStr0)
+  const inPeriode = t => t.date >= periodStart && t.date <= todayStr0;
+
+  /* Alleen VRIJE uitgaven tellen mee voor je dagbudget. Vaste lasten zijn
+     geen dagelijkse keuze — die worden afgeschreven of je nu zuinig leeft
+     of niet. Ze horen dus niet tegen je limiet te drukken. */
+  const vrijeUitgaven = state.transactions
+    .filter(t => t.type === 'expense' && inPeriode(t) && !isFixed(t))
     .reduce((a, t) => a + t.amt, 0);
 
+  /* Het budget van deze periode wordt berekend vanaf wat je bij het BEGIN
+     ervan vrij te besteden had. Alleen vrije uitgaven tellen we terug op:
+     wat er aan vaste lasten afging is écht weg en hoort niet terug. */
   const bank = computeBankBalance();
   const { income, expense } = computeMetrics();
   const nu  = bank !== null ? bank : (income - expense);
-  const pot = nu + spentPeriod;      // saldo zoals het bij aanvang van de periode was
+  const pot = nu + vrijeUitgaven;
 
-  // Vaste lasten die deze cyclus nog moeten komen — die zijn al vergeven
-  let upcoming = 0;
-  (state.recurring || []).filter(r => r.type === 'expense').forEach(r => {
-    let d = new Date(start.getFullYear(), start.getMonth(), Math.min(r.day, 28));
-    if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(r.day, 28));
-    if (d > end) return;
-    const ds = dateToStr(d);
-    if (ds <= todayStr0) return;
-    const alDeze = getCurrentMonthTx().some(t =>
-      t.type === 'expense' && t.desc === r.desc && Math.abs(t.amt - r.amt) < 0.01);
-    if (!alDeze) upcoming += r.amt;
-  });
+  // Vaste lasten die deze cyclus nog moeten komen — vooraf gereserveerd
+  const komend   = upcomingFixed();
+  const upcoming = komend.reduce((a, p) => a + p.amt, 0);
 
   const keep = Number(state.settings.keepTarget) || 0;
   const vrij = pot - upcoming - keep;
 
-  // Hoeveel periodes resten er nog?
-  const perioden = weekly ? Math.max(1, Math.ceil(daysLeft / 7)) : daysLeft;
+  const perioden   = weekly ? Math.max(1, Math.ceil(daysLeft / 7)) : daysLeft;
   const perPeriode = vrij / perioden;
 
   return {
     weekly,
-    perDag:      Math.round(perPeriode * 100) / 100,       // budget voor deze periode
-    restVandaag: Math.round((perPeriode - spentPeriod) * 100) / 100,
-    spentToday:  Math.round(spentPeriod * 100) / 100,
+    perDag:      Math.round(perPeriode * 100) / 100,
+    restVandaag: Math.round((perPeriode - vrijeUitgaven) * 100) / 100,
+    spentToday:  Math.round(vrijeUitgaven * 100) / 100,
     daysLeft,
     perioden,
     upcoming:    Math.round(upcoming * 100) / 100,
+    komend,                       // de posten zelf, voor de uitleg
     keep,
     pot:         Math.round(pot * 100) / 100,
     periodStart,
@@ -1534,8 +1659,7 @@ function computeMetrics() {
      en variabele uitgaven (die per dag doorgaan). De projectie is dan:
      al betaalde vaste lasten + nog verwachte vaste lasten (uit terugkerende
      transacties) + variabele burn-rate doorgetrokken naar het einde. */
-  const fixedCatsSet = new Set(['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening']);
-  const fixedSpent    = tx.filter(t=>t.type==='expense'&&fixedCatsSet.has(t.cat)).reduce((a,t)=>a+t.amt,0);
+  const fixedSpent    = tx.filter(t=>t.type==='expense'&&isFixed(t)).reduce((a,t)=>a+t.amt,0);
   const variableSpent = expense - fixedSpent;
   const variableDaily = variableSpent / dayProgress;
 
@@ -1658,8 +1782,7 @@ function generateCoachTips() {
   }
 
   // ── 5. Vaste lasten aandeel ──
-  const fixedCats = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening'];
-  const fixed = currTx.filter(t=>t.type==='expense'&&fixedCats.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
+  const fixed = currTx.filter(t=>t.type==='expense'&&isFixed(t)).reduce((a,t)=>a+t.amt,0);
   if (income > 0 && fixed > 0) {
     const fixedPct = Math.round((fixed/income)*100);
     if (fixedPct > 55) {
@@ -1887,124 +2010,100 @@ function renderKpiStrip() {
    daarna de boodschappen? Wat er onderaan uit komt, is wat je echt
    overhield. Elke versmalling is een hap.
    ═══════════════════════════════════════════════════════════ */
-function renderFunnel() {
-  const el  = document.getElementById('funnel');
-  const sub = document.getElementById('funnelSub');
+/* ═══════════════════════════════════════════════════════════
+   VASTGELEGD OF VRIJ
+
+   De oude trechter vertelde hetzelfde verhaal als de cijfers erboven.
+   Dit beantwoordt een vraag die nergens anders staat: van je inkomen,
+   hoeveel ligt er al vast voordat je ook maar iets kunt kiezen?
+
+   Vier vakken, elk aan te klikken om te zien waar het uit bestaat.
+   ═══════════════════════════════════════════════════════════ */
+let _splitOpen = null;
+
+function renderSplit() {
+  const el  = document.getElementById('split');
+  const sub = document.getElementById('splitSub');
   if (!el) return;
 
-  const tx = getCurrentMonthTx();
-  const inkomen = tx.filter(t => t.type === 'income').reduce((a, t) => a + t.amt, 0);
+  const tx      = getCurrentMonthTx();
+  const inkomen = tx.filter(t => t.type === 'income').reduce((a,t) => a+t.amt, 0);
 
-  if (inkomen <= 0) {
+  if (inkomen <= 0 && !tx.length) {
     el.innerHTML = '<div class="empty-state">Nog geen inkomsten deze cyclus.</div>';
     if (sub) sub.textContent = '';
     return;
   }
 
-  const VAST = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening'];
-  const vast = tx.filter(t => t.type === 'expense' && VAST.includes(t.cat)).reduce((a,t) => a+t.amt, 0);
-  const vrij = tx.filter(t => t.type === 'expense' && !VAST.includes(t.cat)).reduce((a,t) => a+t.amt, 0);
-  const weg  = tx.filter(t => t.type === 'transfer' && transferDirection(t) === 'out').reduce((a,t) => a+t.amt, 0);
+  const vasteTx = tx.filter(t => t.type === 'expense' &&  isFixed(t));
+  const vrijeTx = tx.filter(t => t.type === 'expense' && !isFixed(t));
+  const wegTx   = tx.filter(t => t.type === 'transfer' && transferDirection(t) === 'out');
 
-  const stappen = [
-    { label:'Binnen',      waarde: inkomen,                       hap:0,    hapLabel:'' },
-    { label:'Na vast',     waarde: inkomen - vast,                hap:vast, hapLabel:'vaste lasten' },
-    { label:'Na dagelijks',waarde: inkomen - vast - vrij,         hap:vrij, hapLabel:'dagelijkse uitgaven' },
-    { label:'Over',        waarde: inkomen - vast - vrij - weg,   hap:weg,  hapLabel:'naar spaarpotten' },
-  ];
+  const vastBetaald = vasteTx.reduce((a,t) => a+t.amt, 0);
+  const komend      = upcomingFixed();
+  const vastKomend  = komend.reduce((a,p) => a+p.amt, 0);
+  const vast        = vastBetaald + vastKomend;
+  const vrijUit     = vrijeTx.reduce((a,t) => a+t.amt, 0);
+  const weg         = wegTx.reduce((a,t) => a+t.amt, 0);
+  const rest        = Math.max(0, inkomen - vast - vrijUit - weg);
 
-  const over    = stappen[stappen.length - 1].waarde;
-  const tekort  = over < 0;
-  if (sub) sub.textContent = `${Math.round((Math.max(0,over)/inkomen)*100)}% van ${fmt(inkomen)} blijft over`;
+  const basis = Math.max(inkomen, vast + vrijUit + weg);
+  const pct   = v => basis > 0 ? (v / basis) * 100 : 0;
 
-  /* ── De stroomvorm ──
-     Elke etappe versmalt van zijn eigen hoogte naar die van de volgende,
-     via een vloeiende bocht. Achter de vorm ligt een lichtere echo, zodat
-     de stroom diepte krijgt zoals bij een rivier op een kaart. */
-  const W = 520, H = 190;
-  const padTop = 34;                       // ruimte voor de bedragen
-  const maxH   = H - padTop - 16;
-  const n      = stappen.length;
-  const sw     = W / n;                    // breedte per etappe
-  const midY   = padTop + maxH / 2;
+  const vakken = [
+    { id:'vast', label:'Vastgelegd', bedrag:vast,    kleur:soortKleur('expense'),
+      posten:[...vasteTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
+              ...komend.map(p => ({ desc:p.desc, amt:p.amt, extra:'komt nog', komend:true }))],
+      uitleg:'huur, abonnementen, verzekeringen — gaat er hoe dan ook af' },
+    { id:'vrij', label:'Zelf gekozen', bedrag:vrijUit, kleur:soortKleur('transfer'),
+      posten:vrijeTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
+      uitleg:'boodschappen, uitjes, aankopen — hier heb je invloed op' },
+    { id:'weg',  label:'Weggezet',    bedrag:weg,     kleur:soortKleur('income'),
+      posten:wegTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
+      uitleg:'naar spaarrekeningen en beleggingen' },
+    { id:'rest', label:'Nog vrij',    bedrag:rest,    kleur:soortKleur('saved'),
+      posten:[], uitleg:'wat er van je inkomen nog niet vergeven is' },
+  ].filter(v => v.bedrag > 0 || v.id === 'rest');
 
-  const hoogte = v => Math.max(3, (Math.max(0, v) / inkomen) * maxH);
-  const grijs  = greysLight();
-  /* Elke etappe kleurt naar wat er is afgegaan: eerst nog volle inkomsten,
-     dan de vaste lasten eraf, dan het dagelijkse, en wat overblijft is
-     spaargeld. */
-  /* De trechter vertelt hoe inkomen in spaargeld verandert. Laat de kleur
-     dat verloop volgen — van het groen van binnenkomend geld naar het goud
-     van wat je overhoudt. Oranje ertussen mengen geeft modder. */
-  const tinten = stappen.map((_, i) =>
-    meng(soortKleur('income'), soortKleur('saved'), 1 - i / (n - 1)));
+  const vastPct = inkomen > 0 ? Math.round((vast / inkomen) * 100) : 0;
+  if (sub) sub.textContent = `${vastPct}% van je inkomen ligt vast`;
 
-  // Eén etappe als gesloten pad: bovenrand heen, onderrand terug
-  const etappe = (i, schaal) => {
-    const h0 = hoogte(stappen[i].waarde) * schaal;
-    const h1 = hoogte(i + 1 < n ? stappen[i+1].waarde : stappen[i].waarde) * schaal;
-    const x0 = i * sw, x1 = (i + 1) * sw;
-    const c  = sw * 0.42;                  // hoe rond de bocht loopt
+  const balk = `<div class="split-bar">
+    ${vakken.map(v => `<button class="split-seg${_splitOpen === v.id ? ' open' : ''}"
+        style="width:${pct(v.bedrag)}%;background:${v.kleur}"
+        onclick="toggleSplit('${v.id}')"
+        title="${v.label}: ${fmt(v.bedrag)}"
+        aria-label="${v.label}, ${fmt(v.bedrag)}"></button>`).join('')}
+  </div>`;
 
-    const t0 = midY - h0/2, t1 = midY - h1/2;
-    const b0 = midY + h0/2, b1 = midY + h1/2;
+  const rij = v => `
+    <button class="split-row${_splitOpen === v.id ? ' open' : ''}" onclick="toggleSplit('${v.id}')">
+      <span class="split-dot" style="background:${v.kleur}"></span>
+      <span class="split-name">${v.label}</span>
+      <span class="split-amt">${fmt(v.bedrag)}</span>
+      <span class="split-pct">${Math.round(pct(v.bedrag))}%</span>
+      <span class="split-chev">${_splitOpen === v.id ? '−' : '+'}</span>
+    </button>
+    ${_splitOpen === v.id ? `
+      <div class="split-detail">
+        <div class="split-uitleg">${v.uitleg}</div>
+        ${v.posten.length ? `<div class="split-posten">
+          ${[...v.posten].sort((a,b) => b.amt - a.amt).slice(0, 8).map(p => `
+            <div class="split-post${p.komend ? ' komend' : ''}">
+              <span class="split-post-desc">${p.desc}</span>
+              <span class="split-post-extra">${p.komend ? 'komt nog' : ''}</span>
+              <span class="split-post-amt">${fmt(p.amt)}</span>
+            </div>`).join('')}
+          ${v.posten.length > 8 ? `<div class="split-meer">nog ${v.posten.length - 8} meer</div>` : ''}
+        </div>` : ''}
+      </div>` : ''}`;
 
-    return `M ${x0} ${t0}
-            C ${x0+c} ${t0}, ${x1-c} ${t1}, ${x1} ${t1}
-            L ${x1} ${b1}
-            C ${x1-c} ${b1}, ${x0+c} ${b0}, ${x0} ${b0} Z`;
-  };
+  el.innerHTML = balk + '<div class="split-rows">' + vakken.map(rij).join('') + '</div>';
+}
 
-  const echo  = stappen.map((_, i) => `<path d="${etappe(i, 1.22)}" fill="${tinten[i]}" opacity="0.16"/>`).join('');
-  const vorm  = stappen.map((_, i) => `<path d="${etappe(i, 1)}" fill="${tinten[i]}"/>`).join('');
-
-  // Scheidingen tussen de etappes
-  const lijnen = stappen.slice(1).map((_, i) => {
-    const x = (i + 1) * sw;
-    return `<line x1="${x}" y1="${padTop - 26}" x2="${x}" y2="${H}"
-             stroke="${state.settings.theme === 'light' ? '#FFFFFF' : '#000000'}" stroke-width="2"/>`;
-  }).join('');
-
-  // Bedragen boven elke etappe
-  const bedragen = stappen.map((s, i) => {
-    const x = i * sw + sw / 2;
-    const neg = s.waarde < 0;
-    return `<text x="${x}" y="${padTop - 12}" class="fun-amt ${neg ? 'neg' : ''}"
-             text-anchor="middle">${neg ? '−' : ''}${fmt(Math.abs(s.waarde))}</text>`;
-  }).join('');
-
-  // Percentages als pil in het hart van de stroom
-  const pillen = stappen.map((s, i) => {
-    const x   = i * sw + sw / 2;
-    const pct = Math.round((Math.max(0, s.waarde) / inkomen) * 100);
-    const tekst = s.waarde < 0 ? 'tekort' : pct + '%';
-    const bw  = tekst.length * 7 + 16;
-    return `<g>
-      <rect x="${x - bw/2}" y="${midY - 10}" width="${bw}" height="20" rx="10"
-            fill="${state.settings.theme === 'light' ? '#171717' : '#FAFAFA'}"/>
-      <text x="${x}" y="${midY + 4}" class="fun-pill" text-anchor="middle">${tekst}</text>
-    </g>`;
-  }).join('');
-
-  // Wat er in elke etappe afging
-  const bijschrift = stappen.map((s, i) => {
-    if (!s.hap) return '';
-    const x = i * sw + sw / 2;
-    return `<text x="${x}" y="${H - 2}" class="fun-cut-lbl" text-anchor="middle">− ${fmt(s.hap)}</text>`;
-  }).join('');
-
-  el.innerHTML = `
-    <svg class="fun-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
-         aria-label="Van je inkomen blijft ${Math.round((Math.max(0,over)/inkomen)*100)} procent over">
-      ${echo}${vorm}${lijnen}${bedragen}${pillen}${bijschrift}
-    </svg>
-    <div class="fun-legend">
-      ${stappen.map((s, i) => `<span class="fun-leg">
-        <span class="fun-leg-name">${s.label}</span>
-        ${s.hapLabel ? `<span class="fun-leg-cut">${s.hapLabel}</span>` : ''}
-      </span>`).join('')}
-    </div>
-    ${tekort ? `<div class="fun-warn">Je zette ${fmt(Math.abs(over))} meer weg dan er deze cyclus binnenkwam — dat kwam uit je buffer.</div>` : ''}`;
+function toggleSplit(id) {
+  _splitOpen = _splitOpen === id ? null : id;
+  renderSplit();
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2134,7 +2233,7 @@ function renderDashboard(){
   renderToday();
 
   /* ── Trechter en kalender ── */
-  renderFunnel();
+  renderSplit();
   renderHeatmap();
 
   /* ── De volgende zet: de missie ── */
@@ -2248,7 +2347,9 @@ function renderToday() {
     <div class="today-meta">
       <span>${a.spentToday > 0 ? fmt(a.spentToday) + ' ' + uit : 'nog niets uitgegeven'}
             · budget ${fmt(a.perDag)}</span>
-      <span>${a.upcoming > 0 ? fmt(a.upcoming) + ' vast · ' : ''}${rest}</span>
+      <span>${a.upcoming > 0
+        ? `<span class="today-res" title="${a.komend.map(p => p.desc + ' ' + fmt(p.amt)).join(' · ')}">${fmt(a.upcoming)} gereserveerd</span> · `
+        : ''}${rest}</span>
     </div>`;
 }
 
@@ -2767,14 +2868,13 @@ function renderMoneyStory() {
 
 
 /* ── Vaste vs variabele lasten ── */
-const FIXED_CATS = ['Wonen','Abonnementen','Verzekeringen','Bankkosten','Lening','Transport'];
 
 function renderFixedVarChart(grid, text) {
   const cycles = getLastNCycles(2);
   const curr = cycles[1];
   const currTx = state.transactions.filter(t=>curr.match(t)&&t.type==='expense');
-  const fixed    = currTx.filter(t=>FIXED_CATS.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
-  const variable = currTx.filter(t=>!FIXED_CATS.includes(t.cat)).reduce((a,t)=>a+t.amt,0);
+  const fixed    = currTx.filter(t=>isFixed(t)).reduce((a,t)=>a+t.amt,0);
+  const variable = currTx.filter(t=>!isFixed(t)).reduce((a,t)=>a+t.amt,0);
 
   const ctx = document.getElementById('fixedVarChart');
   if (!ctx) return;
@@ -3143,7 +3243,8 @@ async function syncToSheets() {
       ['openingDate',    state.settings.openingDate || ''],
       ['keepTarget',     state.settings.keepTarget || 0],
       ['budgetRhythm',   state.settings.budgetRhythm || 'day'],
-      ['loggedThrough',  state.settings.loggedThrough || '']
+      ['loggedThrough',  state.settings.loggedThrough || ''],
+      ['fixedMemory',    JSON.stringify(state.fixedMemory || {})]
     ]);
 
     // Avontuur: level, pad, stad, missie — als JSON zodat het compact blijft
@@ -3273,6 +3374,9 @@ async function syncFromSheets() {
         if (r[0]==='keepTarget')    state.settings.keepTarget    = parseFloat(r[1])||0;
         if (r[0]==='budgetRhythm')  state.settings.budgetRhythm  = r[1]||'day';
         if (r[0]==='loggedThrough') state.settings.loggedThrough = cleanDate(r[1]);
+        if (r[0]==='fixedMemory') {
+          try { state.fixedMemory = r[1] ? JSON.parse(r[1]) : {}; } catch(e) { state.fixedMemory = {}; }
+        }
         if (r[0]==='openingBalance')
           state.settings.openingBalance = (r[1]==='' || r[1]==null) ? null : parseFloat(r[1]);
       });
@@ -3760,6 +3864,7 @@ function repairTimestampDates() {
 async function init(){
   loadState();
   if(!state.recurring) state.recurring=[];
+  if(!state.fixedMemory) state.fixedMemory={};
   if(!state.adventure) state.adventure = {
     xp: 0, pathPosition: 0, pathSteps: 0, cityLevel: 0, unlockedBadges: [],
     currentMission: null, missionHistory: [], lastCycleReport: null,
