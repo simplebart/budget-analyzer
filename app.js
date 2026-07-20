@@ -2133,7 +2133,7 @@ function renderSplit() {
       posten:wegTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
       uitleg:'naar spaarrekeningen en beleggingen' },
     { id:'rest', label:'Nog vrij',    bedrag:rest,    kleur:soortKleur('saved'),
-      posten:[], uitleg:'wat er van je inkomen nog niet vergeven is' },
+      posten:[], uitleg:'nog niet bestemd — dit deel kun je zelf nog kiezen' },
   ].filter(v => v.bedrag > 0 || v.id === 'rest');
 
   const vastPct = inkomen > 0 ? Math.round((vast / inkomen) * 100) : 0;
