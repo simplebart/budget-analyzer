@@ -1350,8 +1350,13 @@ function computeBankBalance() {
   const since = s.openingDate;
   let saldo   = Number(s.openingBalance) || 0;
 
+  /* Alleen wat al gebeurd is. Boek je een afschrijving vooruit — bijvoorbeeld
+     de creditcard zodra het afschrift binnen is — dan hoort die nog niet van
+     je saldo af. Je bank heeft hem immers ook nog niet afgeschreven. */
+  const nu = today();
+
   state.transactions
-    .filter(t => t.date >= since)
+    .filter(t => t.date >= since && t.date <= nu)
     .forEach(t => {
       if (t.type === 'income')  saldo += t.amt;
       if (t.type === 'expense') saldo -= t.amt;
@@ -1368,10 +1373,25 @@ function computeBankBalance() {
 /* ═══════════════════════════════════════════════
    COMPUTE METRICS
    ═══════════════════════════════════════════════ */
+/* Wat er deze cyclus is GEBEURD — tot en met vandaag.
+
+   Boek je iets vooruit, zoals de creditcard zodra het afschrift binnen is,
+   dan is dat een reservering en nog geen uitgave. Anders zou je "Eruit"
+   omhoog springen door een afschrijving die je bank nog moet doen, en zou
+   je banksaldo niet meer kloppen met je dashboard. */
 function getCurrentMonthTx() {
   const { start, end } = getCurrentCycleRange();
   const startStr = dateToStr(start);
-  const endStr = dateToStr(end);
+  const nu = today();
+  const endStr = dateToStr(end) < nu ? dateToStr(end) : nu;   // niet verder dan nu
+  return state.transactions.filter(t => t.date >= startStr && t.date <= endStr);
+}
+
+/* De hele cyclus, inclusief wat er nog moet komen — voor de kalender
+   en voor het opsporen van vooruit geboekte vaste lasten. */
+function getCycleTxAll() {
+  const { start, end } = getCurrentCycleRange();
+  const startStr = dateToStr(start), endStr = dateToStr(end);
   return state.transactions.filter(t => t.date >= startStr && t.date <= endStr);
 }
 
@@ -1544,12 +1564,26 @@ function fixedSpentThisCycle() {
 function upcomingFixed() {
   const { start, end } = getCurrentCycleRange();
   const nu = today();
-  const dezeCyclus = getCurrentMonthTx().filter(t => t.type === 'expense');
-  const alGehad = new Set(dezeCyclus.filter(isFixed).map(t => fixKey(t.desc)));
+
+  const dezeCyclus = getCycleTxAll().filter(t => t.type === 'expense');
+  const alGehad = new Set(dezeCyclus.filter(t => t.date <= nu && isFixed(t)).map(t => fixKey(t.desc)));
 
   const posten = [];
 
-  // 1. Uit de terugkerende transacties
+  /* 1. Al ingeboekt met een datum in de toekomst.
+     Dit is de zuiverste bron: geen schatting maar een bedrag dat je kent.
+     Zodra het ICS-afschrift binnen is boek je hem met de incassodatum, en
+     de app reserveert precies het juiste bedrag. */
+  dezeCyclus
+    .filter(t => t.date > nu && isFixed(t))
+    .forEach(t => {
+      const k = fixKey(t.desc);
+      if (alGehad.has(k)) return;
+      posten.push({ desc: t.desc, amt: t.amt, datum: t.date, bron: 'ingeboekt', zeker: true });
+      alGehad.add(k);
+    });
+
+  /* 2. Uit je terugkerende transacties — vast bedrag, vaste dag. */
   (state.recurring || []).filter(r => r.type === 'expense').forEach(r => {
     const k = fixKey(r.desc);
     if (alGehad.has(k)) return;
@@ -1557,26 +1591,55 @@ function upcomingFixed() {
     if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(r.day, 28));
     if (d > end) return;
     const ds = dateToStr(d);
-    if (ds < nu) return;                       // datum al voorbij, kennelijk niet geboekt
-    posten.push({ desc: r.desc, amt: r.amt, datum: ds, bron: 'terugkerend' });
+    if (ds < nu) return;
+    posten.push({ desc: r.desc, amt: r.amt, datum: ds, bron: 'terugkerend', zeker: true });
     alGehad.add(k);
   });
 
-  // 2. Vaste lasten die vorige cyclus wél kwamen, nu nog niet
-  const vorige = getLastNCycles(2)[0];
-  state.transactions
-    .filter(t => t.type === 'expense' && vorige.match(t) && isFixed(t))
-    .forEach(t => {
-      const k = fixKey(t.desc);
-      if (alGehad.has(k)) return;
-      // Zelfde dag van de maand, maar dan in deze cyclus
-      const dag = parseInt(t.date.slice(8, 10), 10);
-      let d = new Date(start.getFullYear(), start.getMonth(), Math.min(dag, 28));
-      if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(dag, 28));
-      const ds = d > end ? dateToStr(end) : dateToStr(d);
-      posten.push({ desc: t.desc, amt: t.amt, datum: ds, bron: 'vorige cyclus' });
-      alGehad.add(k);
+  /* 3. Wat vorige cycli wél kwam en nu nog niet.
+     Hier moeten we schatten. Bij een vast bedrag zoals huur is dat triviaal,
+     maar posten als een creditcard verschillen elke maand. Daarom nemen we
+     het gemiddelde van de laatste drie keer, en geven we de bandbreedte mee
+     zodat zichtbaar is hoe hard die schatting is. */
+  const cycli = getLastNCycles(4).slice(0, 3);   // de drie vóór deze
+  const geschiedenis = {};
+
+  cycli.forEach(c => {
+    state.transactions
+      .filter(t => t.type === 'expense' && c.match(t) && isFixed(t))
+      .forEach(t => {
+        const k = fixKey(t.desc);
+        (geschiedenis[k] ||= { desc: t.desc, bedragen: [], dagen: [] });
+        geschiedenis[k].bedragen.push(t.amt);
+        geschiedenis[k].dagen.push(parseInt(t.date.slice(8, 10), 10));
+      });
+  });
+
+  Object.entries(geschiedenis).forEach(([k, g]) => {
+    if (alGehad.has(k)) return;
+
+    const gem  = g.bedragen.reduce((a, b) => a + b, 0) / g.bedragen.length;
+    const min  = Math.min(...g.bedragen);
+    const max  = Math.max(...g.bedragen);
+    const dag  = g.dagen[g.dagen.length - 1];          // meest recente dag
+    const wisselt = (max - min) > Math.max(1, gem * 0.05);
+
+    let d = new Date(start.getFullYear(), start.getMonth(), Math.min(dag, 28));
+    if (d < start) d = new Date(start.getFullYear(), start.getMonth() + 1, Math.min(dag, 28));
+    const ds = d > end ? dateToStr(end) : dateToStr(d);
+
+    posten.push({
+      desc: g.desc,
+      amt: Math.round(gem * 100) / 100,
+      datum: ds,
+      bron: 'schatting',
+      zeker: false,
+      wisselt,
+      min, max,
+      keer: g.bedragen.length,
     });
+    alGehad.add(k);
+  });
 
   return posten;
 }
@@ -2052,8 +2115,16 @@ function renderSplit() {
 
   const vakken = [
     { id:'vast', label:'Vastgelegd', bedrag:vast,    kleur:soortKleur('expense'),
-      posten:[...vasteTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
-              ...komend.map(p => ({ desc:p.desc, amt:p.amt, extra:'komt nog', komend:true }))],
+      posten:[...vasteTx.map(t => ({ desc:t.desc, amt:t.amt, extra:'' })),
+              ...komend.map(p => ({
+                desc: p.desc,
+                amt: p.amt,
+                extra: p.zeker
+                  ? 'komt nog'
+                  : (p.wisselt ? `≈ schatting · wisselt ${fmt(p.min)}–${fmt(p.max)}` : '≈ schatting'),
+                komend: true,
+                geschat: !p.zeker,
+              }))],
       uitleg:'huur, abonnementen, verzekeringen — gaat er hoe dan ook af' },
     { id:'vrij', label:'Zelf gekozen', bedrag:vrijUit, kleur:soortKleur('transfer'),
       posten:vrijeTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
@@ -2089,10 +2160,10 @@ function renderSplit() {
         <div class="split-uitleg">${v.uitleg}</div>
         ${v.posten.length ? `<div class="split-posten">
           ${[...v.posten].sort((a,b) => b.amt - a.amt).slice(0, 8).map(p => `
-            <div class="split-post${p.komend ? ' komend' : ''}">
+            <div class="split-post${p.komend ? ' komend' : ''}${p.geschat ? ' geschat' : ''}">
               <span class="split-post-desc">${p.desc}</span>
-              <span class="split-post-extra">${p.komend ? 'komt nog' : ''}</span>
-              <span class="split-post-amt">${fmt(p.amt)}</span>
+              <span class="split-post-extra">${p.extra || ''}</span>
+              <span class="split-post-amt">${p.geschat ? '≈ ' : ''}${fmt(p.amt)}</span>
             </div>`).join('')}
           ${v.posten.length > 8 ? `<div class="split-meer">nog ${v.posten.length - 8} meer</div>` : ''}
         </div>` : ''}
@@ -2348,7 +2419,11 @@ function renderToday() {
       <span>${a.spentToday > 0 ? fmt(a.spentToday) + ' ' + uit : 'nog niets uitgegeven'}
             · budget ${fmt(a.perDag)}</span>
       <span>${a.upcoming > 0
-        ? `<span class="today-res" title="${a.komend.map(p => p.desc + ' ' + fmt(p.amt)).join(' · ')}">${fmt(a.upcoming)} gereserveerd</span> · `
+        ? `<span class="today-res${a.komend.some(p => !p.zeker) ? ' geschat' : ''}"
+             title="${a.komend.map(p =>
+               p.desc + ' ' + (p.zeker ? '' : '≈ ') + fmt(p.amt) +
+               (p.wisselt ? ` (wisselt: ${fmt(p.min)}–${fmt(p.max)})` : '')
+             ).join(' · ')}">${a.komend.some(p => !p.zeker) ? '≈ ' : ''}${fmt(a.upcoming)} gereserveerd</span> · `
         : ''}${rest}</span>
     </div>`;
 }
