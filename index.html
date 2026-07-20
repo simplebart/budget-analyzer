@@ -175,10 +175,10 @@
       <div class="split-wide">
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Van binnen naar over</span>
-            <span class="card-sub" id="funnelSub"></span>
+            <span class="card-title">Vastgelegd of vrij</span>
+            <span class="card-sub" id="splitSub"></span>
           </div>
-          <div id="funnel" class="funnel"></div>
+          <div id="split"></div>
         </div>
 
         <div class="card">
@@ -833,6 +833,16 @@
         <label class="form-label">Categorie</label>
         <select class="form-input" id="txCat"></select>
       </div>
+
+      <!-- Vaste last: wordt vooraf gereserveerd, niet uitgesmeerd over je dagen -->
+      <label class="fixed-toggle" id="txFixedWrap">
+        <input type="checkbox" id="txFixed" />
+        <span class="fixed-box" aria-hidden="true"></span>
+        <span class="fixed-text">
+          <span class="fixed-title">Vaste last</span>
+          <span class="fixed-hint" id="txFixedHint">Telt niet mee in je dagbudget — wordt vooraf gereserveerd</span>
+        </span>
+      </label>
       <div class="form-group" id="transferAccountsWrap" style="display:none">
         <div class="form-row">
           <div class="form-group">
