@@ -4148,3 +4148,15 @@ body.app-locked .pin-screen { visibility: visible; }
   background-image: repeating-linear-gradient(45deg,
     rgba(0,0,0,0.35) 0 2px, transparent 2px 4px);
 }
+
+/* Wat er buiten de verdeling is gelaten */
+.split-door {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--ink);
+  border: 1px dashed var(--edge-hi);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--chalk-3);
+}
