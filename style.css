@@ -3715,8 +3715,6 @@ body.app-locked .pin-screen { visibility: visible; }
 
   .split-wide { gap: 12px; margin-bottom: 14px; }
 
-  .fun-track { height: 19px; }
-  .fun-val { font-size: 13px; }
 
   .heat-cell { border-radius: 3px; }
   .heat-grid, .heat-dows { gap: 3px; }
@@ -3805,7 +3803,6 @@ body.app-locked .pin-screen { visibility: visible; }
 
 
 /* ── Trechter: één grijstint, geen verloop ── */
-.fun-val   { font-size: 13px; }
 
 /* ── Kalender: grijstrap in plaats van rood ── */
 /* Vier treden in de uitgavenkleur: hoe donkerder het vak, hoe meer eruit ging */
@@ -3913,93 +3910,218 @@ body.app-locked .pin-screen { visibility: visible; }
 
 
 
+
+@media (max-width: 620px) {
+}
+
 /* ═══════════════════════════════════════════════════════════
-   DE TRECHTER — waar je inkomen onderweg blijft hangen
+   VASTGELEGD OF VRIJ
 
-   Een stroom die versmalt. Achter de vorm ligt een lichtere echo
-   zodat de stroom diepte krijgt, en elke etappe is een tint donkerder
-   dan de vorige — de smalste is ook de zwaarste.
+   Eén balk die je inkomen verdeelt, met eronder de vier vakken.
+   Klik een vak open en je ziet waar het uit bestaat — inclusief
+   vaste lasten die nog moeten komen.
    ═══════════════════════════════════════════════════════════ */
-.funnel { display: block; }
-
-.fun-svg {
-  display: block;
-  width: 100%;
-  height: 190px;
-  overflow: visible;
-}
-
-/* De bedragen boven de stroom */
-.fun-svg .fun-amt {
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  fill: var(--chalk);
-}
-.fun-svg .fun-amt.neg { fill: var(--down); }
-
-/* De percentages als pil in het hart */
-.fun-svg .fun-pill {
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 700;
-  fill: var(--ink);
-}
-
-/* Wat er in elke etappe afging */
-.fun-svg .fun-cut-lbl {
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 600;
-  fill: var(--chalk-3);
-}
-
-/* De namen onder de stroom */
-.fun-legend {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--edge);
-}
-
-.fun-leg {
+.split-bar {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  text-align: center;
+  gap: 2px;
+  height: 30px;
+  margin-bottom: 14px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--ink);
 }
 
-.fun-leg-name {
-  font-size: 10px;
+.split-seg {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  min-width: 3px;
+  transition: opacity var(--t-fast), transform var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.split-seg:hover { opacity: 0.82; }
+.split-seg.open  { transform: scaleY(1.12); }
+
+/* Het laatste vak is wat er nog vrij is — dat is een belofte,
+   geen besteding, dus krijgt het een streepjespatroon. */
+.split-seg:last-child {
+  background-image: repeating-linear-gradient(45deg,
+    rgba(0,0,0,0.22) 0 4px, transparent 4px 8px);
+}
+
+.split-rows { display: flex; flex-direction: column; }
+
+.split-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 6px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--edge);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  text-align: left;
+  transition: background var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.split-row:hover { background: var(--ink-3); }
+.split-row.open  { border-bottom-color: transparent; }
+
+.split-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+
+.split-name {
+  flex: 1;
+  color: var(--chalk);
+  font-weight: 500;
+}
+
+.split-amt {
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--chalk-2);
+  color: var(--chalk);
 }
 
-.fun-leg-cut {
+.split-pct {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--chalk-3);
+  min-width: 34px;
+  text-align: right;
+}
+
+.split-chev {
+  width: 16px;
+  text-align: center;
+  color: var(--chalk-3);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Wat er in een vak zit ── */
+.split-detail {
+  padding: 2px 6px 12px 25px;
+  border-bottom: 1px solid var(--edge);
+  animation: splitOpen var(--t) both;
+}
+
+@keyframes splitOpen {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.split-uitleg {
+  font-size: 11px;
+  color: var(--chalk-3);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.split-posten { display: flex; flex-direction: column; gap: 1px; }
+
+.split-post {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+
+.split-post-desc {
+  flex: 1;
+  color: var(--chalk-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-post-extra {
   font-size: 10px;
   color: var(--chalk-3);
 }
 
-/* Zet je meer weg dan er binnenkwam, dan zeggen we dat gewoon */
-.fun-warn {
-  margin-top: 10px;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--ember-dim);
-  border: 1px solid color-mix(in srgb, var(--down) 25%, transparent);
+.split-post-amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--chalk);
+}
+
+/* Vaste lasten die nog moeten komen zijn een verwachting, geen feit */
+.split-post.komend .split-post-desc,
+.split-post.komend .split-post-amt { opacity: 0.62; }
+.split-post.komend .split-post-extra {
+  color: var(--expense);
+  font-weight: 600;
+}
+
+.split-meer {
   font-size: 11px;
-  line-height: 1.5;
-  color: var(--down);
+  color: var(--chalk-3);
+  padding-top: 5px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DE VASTE-LAST-SCHAKELAAR
+   ═══════════════════════════════════════════════════════════ */
+.fixed-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 13px;
+  margin-top: 4px;
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.fixed-toggle:hover { border-color: var(--edge-hi); }
+.fixed-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+
+.fixed-box {
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border-radius: 5px;
+  border: 1.5px solid var(--edge-hi);
+  background: var(--ink-2);
+  position: relative;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.fixed-box::after {
+  content: '';
+  position: absolute;
+  left: 5px; top: 1px;
+  width: 5px; height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform var(--t-fast);
+}
+
+.fixed-toggle input:checked ~ .fixed-box {
+  background: var(--expense);
+  border-color: var(--expense);
+}
+.fixed-toggle input:checked ~ .fixed-box::after { transform: rotate(45deg) scale(1); }
+.fixed-toggle input:focus-visible ~ .fixed-box { outline: 2px solid var(--chalk); outline-offset: 2px; }
+
+.fixed-text { display: flex; flex-direction: column; gap: 2px; }
+.fixed-title { font-size: 13px; font-weight: 600; color: var(--chalk); }
+.fixed-hint  { font-size: 11px; color: var(--chalk-3); line-height: 1.45; }
+
+/* Wat er gereserveerd staat, op het bord */
+.today-res {
+  color: var(--expense);
+  font-weight: 600;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
 }
 
 @media (max-width: 620px) {
-  .fun-svg { height: 160px; }
-  .fun-svg .fun-amt { font-size: 11px; }
-  .fun-legend { gap: 2px; }
-  .fun-leg-cut { display: none; }
+  .split-bar { height: 24px; }
+  .split-detail { padding-left: 18px; }
 }
