@@ -4140,3 +4140,11 @@ body.app-locked .pin-screen { visibility: visible; }
   padding-top: 5px;
   border-top: 1px dashed var(--edge-hi);
 }
+
+/* Een tekort is geen verdeling van je inkomen maar een greep uit je buffer */
+.split-row.tekort .split-amt  { color: var(--expense); }
+.split-row.tekort .split-name { color: var(--chalk-2); }
+.split-row.tekort .split-dot  {
+  background-image: repeating-linear-gradient(45deg,
+    rgba(0,0,0,0.35) 0 2px, transparent 2px 4px);
+}
