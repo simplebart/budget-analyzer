@@ -2108,7 +2108,11 @@ function renderSplit() {
   const vast        = vastBetaald + vastKomend;
   const vrijUit     = vrijeTx.reduce((a,t) => a+t.amt, 0);
   const weg         = wegTx.reduce((a,t) => a+t.amt, 0);
-  const rest        = Math.max(0, inkomen - vast - vrijUit - weg);
+  /* Niet afkappen op nul. Gaat dit onder nul, dan heb je méér bestemd dan
+     er deze cyclus binnenkwam — het verschil komt uit wat je al had staan.
+     Dat is geen fout maar een keuze, en die hoort zichtbaar te zijn. */
+  const rest   = inkomen - vast - vrijUit - weg;
+  const tekort = rest < 0;
 
   const basis = Math.max(inkomen, vast + vrijUit + weg);
   const pct   = v => basis > 0 ? (v / basis) * 100 : 0;
@@ -2132,15 +2136,23 @@ function renderSplit() {
     { id:'weg',  label:'Weggezet',    bedrag:weg,     kleur:soortKleur('income'),
       posten:wegTx.map(t => ({ desc:t.desc, amt:t.amt, extra:t.date })),
       uitleg:'naar spaarrekeningen en beleggingen' },
-    { id:'rest', label:'Nog vrij',    bedrag:rest,    kleur:soortKleur('saved'),
-      posten:[], uitleg:'nog niet bestemd — dit deel kun je zelf nog kiezen' },
+    tekort
+      ? { id:'rest', label:'Uit je buffer', bedrag:Math.abs(rest), kleur:soortKleur('expense'),
+          tekort:true, posten:[],
+          uitleg:'je bestemde meer dan er deze cyclus binnenkwam — het verschil kwam uit wat je al had staan' }
+      : { id:'rest', label:'Nog vrij', bedrag:rest, kleur:soortKleur('saved'),
+          posten:[], uitleg:'nog niet bestemd — dit deel kun je zelf nog kiezen' },
   ].filter(v => v.bedrag > 0 || v.id === 'rest');
 
   const vastPct = inkomen > 0 ? Math.round((vast / inkomen) * 100) : 0;
-  if (sub) sub.textContent = `${vastPct}% van je inkomen ligt vast`;
+  if (sub) sub.textContent = tekort
+    ? `${fmt(Math.abs(rest))} meer bestemd dan binnengekomen`
+    : `${vastPct}% van je inkomen ligt vast`;
 
+  /* Een tekort is geen deel van je inkomen — dat past niet in de balk.
+     Die toont alleen wat er daadwerkelijk verdeeld is. */
   const balk = `<div class="split-bar">
-    ${vakken.map(v => `<button class="split-seg${_splitOpen === v.id ? ' open' : ''}"
+    ${vakken.filter(v => !v.tekort).map(v => `<button class="split-seg${_splitOpen === v.id ? ' open' : ''}"
         style="width:${pct(v.bedrag)}%;background:${v.kleur}"
         onclick="toggleSplit('${v.id}')"
         title="${v.label}: ${fmt(v.bedrag)}"
@@ -2148,11 +2160,11 @@ function renderSplit() {
   </div>`;
 
   const rij = v => `
-    <button class="split-row${_splitOpen === v.id ? ' open' : ''}" onclick="toggleSplit('${v.id}')">
+    <button class="split-row${_splitOpen === v.id ? ' open' : ''}${v.tekort ? ' tekort' : ''}" onclick="toggleSplit('${v.id}')">
       <span class="split-dot" style="background:${v.kleur}"></span>
       <span class="split-name">${v.label}</span>
-      <span class="split-amt">${fmt(v.bedrag)}</span>
-      <span class="split-pct">${Math.round(pct(v.bedrag))}%</span>
+      <span class="split-amt">${v.tekort ? '−' : ''}${fmt(v.bedrag)}</span>
+      <span class="split-pct">${v.tekort ? '' : Math.round(pct(v.bedrag)) + '%'}</span>
       <span class="split-chev">${_splitOpen === v.id ? '−' : '+'}</span>
     </button>
     ${_splitOpen === v.id ? `
