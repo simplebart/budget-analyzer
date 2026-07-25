@@ -585,48 +585,227 @@ function showMissionResult(tpl, result, xpChange, pathInfo) {
 
 /* ═══════════════════════════════════════════════
    CYCLUS-RAPPORT — aan het einde van elke cyclus
+
+   Bij elke cycluswissel wordt het rapport van de zojuist AFGESLOTEN cyclus
+   éénmalig opgebouwd, VASTGELEGD (bevroren) in state.cycleReports en getoond.
+   Vastleggen is bewust: de app leidt cyclusgrenzen af uit de HUIDIGE
+   cycleStartDay. Verander je die later (ander salarismoment), dan zouden
+   oude cycli met terugwerkende kracht anders geknipt worden — een bevroren
+   momentopname blijft kloppen met de grenzen die op het sluitmoment golden.
    ═══════════════════════════════════════════════ */
 function checkCycleReport() {
   const a = state.adventure;
   const { start } = getCurrentCycleRange();
-  const cycleKey = dateToStr(start);
+  const cycleKey = dateToStr(start);            // start van de HUIDIGE cyclus
 
-  // Al gerapporteerd voor deze cyclus?
+  // Deze cycluswissel al afgehandeld? Dan niets doen.
   if (a.lastCycleReport === cycleKey) return;
 
-  // Is er een vorige cyclus met data?
-  const cycles = getLastNCycles(2);
-  const prev = cycles[0];
-  const prevTx = state.transactions.filter(t => prev.match(t));
-  if (!prevTx.length) {
-    a.lastCycleReport = cycleKey;
-    saveState(true);
-    return;
-  }
+  // De zojuist afgesloten cyclus = de cyclus vóór de huidige.
+  const prev = getLastNCycles(2)[0];
+  const prevStart = dateToStr(prev.start);
+  const prevEnd   = dateToStr(prev.end);
+  const prevTx = state.transactions.filter(t => t.date >= prevStart && t.date <= prevEnd);
 
+  // Markeer als afgehandeld, óók als er niets te rapporteren valt.
   a.lastCycleReport = cycleKey;
+
+  if (!prevTx.length) { saveState(true); return; }
+
+  // Vastleggen (bevriezen) — maar nooit een bestaand rapport overschrijven.
+  if (!Array.isArray(state.cycleReports)) state.cycleReports = [];
+  let snap = state.cycleReports.find(r => r.key === prevStart);
+  if (!snap) {
+    snap = buildCycleReportSnapshot(prev);
+    state.cycleReports.push(snap);
+    state.cycleReports.sort((x, y) => x.key < y.key ? -1 : 1);
+    if (state.cycleReports.length > 24) state.cycleReports = state.cycleReports.slice(-24);
+  }
   saveState(true);
 
-  setTimeout(() => showCycleReport(prev, prevTx), 1200);
+  setTimeout(() => showCycleReport(snap), 1200);
 }
 
-function showCycleReport(cycle, tx) {
-  const income  = tx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amt,0);
-  const expense = tx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amt,0);
-  const saved   = income - expense;
-  const savedPct = income > 0 ? Math.round((saved/income)*100) : 0;
+/* Handmatig het meest recente rapport heropenen (bijv. vanaf een knop:
+   onclick="openLatestCycleReport()"). */
+function openLatestCycleReport() {
+  const list = state.cycleReports || [];
+  if (!list.length) {
+    if (typeof showToast === 'function') showToast('Er is nog geen cyclusrapport.', 'info');
+    return;
+  }
+  showCycleReport(list[list.length - 1]);
+}
 
-  // Missies van deze cyclus
-  const cycleStart = dateToStr(cycle.start);
-  const cycleEnd   = dateToStr(cycle.end);
-  const missions = state.adventure.missionHistory.filter(m => m.week >= cycleStart && m.week <= cycleEnd);
-  const won  = missions.filter(m=>m.success).length;
-  const lost = missions.filter(m=>!m.success).length;
-  const xpGained = missions.reduce((a,m)=>a+m.xpChange, 0);
+/* De cyclus vóór 'cycle' — via de dag vlak vóór zijn startdatum, zodat de
+   berekening dezelfde flexibele cyclusgrens gebruikt als de rest van de app. */
+function _prevCycleRange(cycle) {
+  const d = new Date(cycle.start.getFullYear(), cycle.start.getMonth(), cycle.start.getDate() - 1);
+  return getCycleRangeFor(d);
+}
 
-  const lvl = getLevelInfo();
-  const city = getCityInfo();
-  const path = getPathInfo();
+/* Bouw een bevroren momentopname van één afgesloten cyclus. */
+function buildCycleReportSnapshot(cycle) {
+  const startStr = dateToStr(cycle.start);
+  const endStr   = dateToStr(cycle.end);
+  const tx = state.transactions.filter(t => t.date >= startStr && t.date <= endStr);
+
+  const prev = _prevCycleRange(cycle);
+  const pStart = dateToStr(prev.start), pEnd = dateToStr(prev.end);
+  const prevTx = state.transactions.filter(t => t.date >= pStart && t.date <= pEnd);
+
+  const som = (arr, type) => arr.filter(t => t.type === type).reduce((a, t) => a + t.amt, 0);
+  const income   = som(tx, 'income');
+  const expense  = som(tx, 'expense');
+  const saved    = income - expense;
+  const savedPct = income > 0 ? Math.round(saved / income * 100) : 0;
+  const fixed    = tx.filter(t => t.type === 'expense' && isFixed(t)).reduce((a, t) => a + t.amt, 0);
+  const variable = expense - fixed;
+
+  const cats = {}, prevCats = {};
+  tx.filter(t => t.type === 'expense').forEach(t => cats[t.cat] = (cats[t.cat] || 0) + t.amt);
+  prevTx.filter(t => t.type === 'expense').forEach(t => prevCats[t.cat] = (prevCats[t.cat] || 0) + t.amt);
+
+  const topCats = Object.entries(cats)
+    .map(([cat, amt]) => ({ cat, amt, pct: expense > 0 ? Math.round(amt / expense * 100) : 0 }))
+    .sort((a, b) => b.amt - a.amt).slice(0, 5);
+
+  const findings = analyzeCycleFindings({
+    income, expense, saved, savedPct, fixed, variable,
+    cats, prevCats,
+    prevIncome: som(prevTx, 'income'),
+    prevExpense: som(prevTx, 'expense'),
+    tx, hasPrev: prevTx.length > 0
+  });
+
+  const hist = (state.adventure && state.adventure.missionHistory) || [];
+  const missions = hist.filter(m => m.week >= startStr && m.week <= endStr);
+
+  return {
+    key: startStr, start: startStr, end: endStr,
+    label: cycle.fullLabel || `${startStr} – ${endStr}`,
+    generatedAt: today(),
+    income, expense, saved, savedPct, fixed, variable,
+    topCats,
+    wins: findings.wins, watch: findings.watch, improve: findings.improve,
+    missions: {
+      won: missions.filter(m => m.success).length,
+      lost: missions.filter(m => !m.success).length,
+      xpGained: missions.reduce((a, m) => a + (m.xpChange || 0), 0),
+      list: missions.map(m => ({ icon: m.icon, name: m.name, success: m.success, xpChange: m.xpChange }))
+    }
+  };
+}
+
+/* Verdeel de bevindingen over drie emmers: wat ging goed, wat viel tegen,
+   en wat er beter kan (met een concrete "hoe"). Bewust bescheiden: max een
+   paar per emmer, zodat het rapport leesbaar blijft. */
+function analyzeCycleFindings(d) {
+  const wins = [], watch = [], improve = [];
+  const budgets = state.budgets || {};
+
+  /* ── WAT GING GOED ── */
+  if (d.income > 0 && d.saved > 0 && d.savedPct >= 10) {
+    wins.push({ icon: '💪', title: `Je hield ${fmt(d.saved)} over`,
+      text: `Dat is <strong>${d.savedPct}%</strong> van je inkomen — mooie buffer opgebouwd deze cyclus.` });
+  }
+  if (d.hasPrev) {
+    const dalers = Object.entries(d.prevCats)
+      .map(([cat, was]) => ({ cat, was, nu: d.cats[cat] || 0, diff: (d.cats[cat] || 0) - was }))
+      .filter(x => x.was > 20 && x.diff < -15).sort((a, b) => a.diff - b.diff);
+    if (dalers.length) {
+      const x = dalers[0], pct = Math.round(Math.abs(x.diff) / x.was * 100);
+      wins.push({ icon: '📉', title: `${x.cat} ${pct}% omlaag`,
+        text: `<strong>${fmt(Math.abs(x.diff))} minder</strong> dan de vorige cyclus (${fmt(x.was)} → ${fmt(x.nu)}). Volhouden = ${fmt(Math.abs(x.diff) * 12)} per jaar.` });
+    }
+    if (d.prevExpense > 0 && d.expense < d.prevExpense - 20) {
+      wins.push({ icon: '✅', title: 'Minder uitgegeven dan vorige cyclus',
+        text: `In totaal <strong>${fmt(d.prevExpense - d.expense)} minder</strong> (${fmt(d.prevExpense)} → ${fmt(d.expense)}).` });
+    }
+  }
+  const gehaald = Object.entries(budgets).filter(([cat, lim]) => lim > 0 && (d.cats[cat] || 0) <= lim);
+  if (gehaald.length) {
+    wins.push({ icon: '🎯', title: `${gehaald.length} ${gehaald.length === 1 ? 'budget' : 'budgetten'} gehaald`,
+      text: `Binnen de limiet gebleven bij: ${gehaald.slice(0, 3).map(([c]) => c).join(', ')}.` });
+  }
+
+  /* ── WAT VIEL TEGEN ── */
+  if (d.income > 0 && d.saved < 0) {
+    watch.push({ icon: '⚠️', title: 'Meer uitgegeven dan binnenkwam',
+      text: `Je kwam <strong>${fmt(Math.abs(d.saved))}</strong> tekort; dat ging uit je buffer. Kijk of er een eenmalige uitgave achter zit of dat het structureel is.` });
+  } else if (d.income > 0 && d.expense / d.income > 0.9) {
+    watch.push({ icon: '🪙', title: 'Bijna alles ging op',
+      text: `<strong>${Math.round(d.expense / d.income * 100)}%</strong> van je inkomen is uitgegeven. Er bleef weinig marge over.` });
+  }
+  if (d.hasPrev) {
+    const stijgers = Object.entries(d.cats)
+      .map(([cat, amt]) => ({ cat, amt, was: d.prevCats[cat] || 0, diff: amt - (d.prevCats[cat] || 0) }))
+      .filter(x => x.was > 0 && x.diff > 20).sort((a, b) => b.diff - a.diff);
+    if (stijgers.length) {
+      const x = stijgers[0], pct = Math.round(x.diff / x.was * 100);
+      watch.push({ icon: '📈', title: `${x.cat} steeg ${pct}%`,
+        text: `<strong>${fmt(x.diff)} meer</strong> dan vorige cyclus (${fmt(x.was)} → ${fmt(x.amt)}). Bewuste keuze of sluipt het erin?` });
+    }
+  }
+  const over = Object.entries(budgets).filter(([cat, lim]) => lim > 0 && (d.cats[cat] || 0) > lim)
+    .map(([cat, lim]) => ({ cat, lim, spent: d.cats[cat] || 0 }))
+    .sort((a, b) => (b.spent - b.lim) - (a.spent - a.lim));
+  if (over.length) {
+    const x = over[0];
+    watch.push({ icon: '🚧', title: `Budget ${x.cat} overschreden`,
+      text: `${fmt(x.spent)} van ${fmt(x.lim)} — <strong>${fmt(x.spent - x.lim)} over de limiet</strong>${over.length > 1 ? ` (en nog ${over.length - 1} andere)` : ''}.` });
+  }
+
+  /* ── WAT KAN BETER + HOE ── */
+  if (d.income > 0) {
+    const fixedPct = Math.round(d.fixed / d.income * 100);
+    if (fixedPct > 55) {
+      improve.push({ icon: '🏠', title: `Vaste lasten zijn ${fixedPct}% van je inkomen`,
+        text: `Vuistregel is max 50%. <strong>Hoe:</strong> vergelijk energie en verzekeringen eens per jaar, en heronderhandel of zeg ongebruikte abonnementen op — dat verlaagt je vaste last blijvend.` });
+    }
+    if (d.savedPct < 10) {
+      improve.push({ icon: '💸', title: 'Weinig gespaard deze cyclus',
+        text: `<strong>Hoe:</strong> zet ${fmt(d.income * 0.1)} (10%) apart zodra je salaris binnenkomt, vóór je iets uitgeeft — "betaal jezelf eerst". Automatiseer het als vaste overboeking.` });
+    }
+  }
+  const klein = d.tx.filter(t => t.type === 'expense' && t.amt < 15);
+  if (klein.length >= 8) {
+    const kt = klein.reduce((a, t) => a + t.amt, 0);
+    improve.push({ icon: '☕', title: `${klein.length} kleine uitgaven onder €15`,
+      text: `Samen <strong>${fmt(kt)}</strong> deze cyclus. <strong>Hoe:</strong> bundel ze in je hoofd tot één bedrag — vaak blijkt de helft vermijdbaar zonder dat je iets mist.` });
+  }
+  const subs = d.tx.filter(t => t.type === 'expense' && t.cat === 'Abonnementen');
+  if (subs.length >= 4) {
+    const st = subs.reduce((a, t) => a + t.amt, 0);
+    improve.push({ icon: '📺', title: `${subs.length} abonnementen = ${fmt(st)}/cyclus`,
+      text: `Dat is <strong>${fmt(st * 12)}</strong> per jaar. <strong>Hoe:</strong> loop ze langs en zeg er één op die je nauwelijks gebruikt — elke ${fmt(subs[0].amt)}/mnd bespaart ${fmt(subs[0].amt * 12)}/jaar.` });
+  }
+
+  // Zachte terugval als een emmer leeg is, zodat het rapport nooit kaal oogt.
+  if (!wins.length)    wins.push({ icon: '🌱', title: 'Rustige cyclus', text: 'Geen grote uitschieters de goede kant op — een stabiele maand is ook winst.' });
+  if (!watch.length)   watch.push({ icon: '👍', title: 'Niets zorgwekkends', text: 'Geen budgetten overschreden en geen grote stijgers. Netjes in balans.' });
+  if (!improve.length) improve.push({ icon: '✨', title: 'Weinig aan te merken', text: 'Je patroon ziet er gezond uit. Blijf doen wat je doet.' });
+
+  return { wins: wins.slice(0, 3), watch: watch.slice(0, 3), improve: improve.slice(0, 3) };
+}
+
+function showCycleReport(snap) {
+  // Alleen een bevroren momentopname wordt getoond.
+  if (!snap || !snap.key) return;
+
+  const tipHtml = (t, type) => `
+    <div class="coach-tip coach-tip-${type}">
+      <span class="coach-tip-icon">${t.icon}</span>
+      <div class="coach-tip-body">
+        <div class="coach-tip-title">${t.title}</div>
+        <div class="coach-tip-text">${t.text}</div>
+      </div>
+    </div>`;
+
+  const lvl  = (typeof getLevelInfo === 'function') ? getLevelInfo() : null;
+  const city = (typeof getCityInfo  === 'function') ? getCityInfo()  : null;
+  const path = (typeof getPathInfo  === 'function') ? getPathInfo()  : null;
+  const m = snap.missions || { won: 0, lost: 0, xpGained: 0, list: [] };
 
   const overlay = document.createElement('div');
   overlay.className = 'adv-overlay';
@@ -634,61 +813,78 @@ function showCycleReport(cycle, tx) {
     <div class="adv-report-card">
       <div class="adv-report-header">
         <div class="adv-report-title">Cyclusrapport</div>
-        <div class="adv-report-sub">${cycle.fullLabel}</div>
+        <div class="adv-report-sub">${snap.label}</div>
       </div>
 
       <div class="adv-report-money">
         <div class="adv-money-item">
           <span class="adv-money-lbl">Verdiend</span>
-          <span class="adv-money-val" style="color:var(--green)">${fmt(income)}</span>
+          <span class="adv-money-val" style="color:var(--green)">${fmt(snap.income)}</span>
         </div>
         <div class="adv-money-item">
           <span class="adv-money-lbl">Uitgegeven</span>
-          <span class="adv-money-val" style="color:var(--red)">${fmt(expense)}</span>
+          <span class="adv-money-val" style="color:var(--red)">${fmt(snap.expense)}</span>
         </div>
         <div class="adv-money-item">
           <span class="adv-money-lbl">Overgehouden</span>
-          <span class="adv-money-val" style="color:${saved>=0?'var(--green)':'var(--red)'}">${fmt(saved)} (${savedPct}%)</span>
+          <span class="adv-money-val" style="color:${snap.saved >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(snap.saved)} (${snap.savedPct}%)</span>
         </div>
       </div>
 
-      ${missions.length ? `
-      <div class="adv-report-missions">
+      ${snap.topCats && snap.topCats.length ? `
+      <div class="adv-report-section" style="margin-top:14px">
+        <div class="adv-report-section-title">Waar je geld heen ging</div>
+        ${snap.topCats.map(c => `
+          <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:14px">
+            <span>${typeof catEmoji === 'function' ? catEmoji(c.cat) : ''} ${c.cat}</span>
+            <span style="color:var(--text2)">${fmt(c.amt)} · ${c.pct}%</span>
+          </div>`).join('')}
+      </div>` : ''}
+
+      <div class="adv-report-section" style="margin-top:16px">
+        <div class="adv-report-section-title" style="color:var(--green)">Wat ging goed</div>
+        ${snap.wins.map(t => tipHtml(t, 'good')).join('')}
+      </div>
+
+      <div class="adv-report-section" style="margin-top:12px">
+        <div class="adv-report-section-title" style="color:var(--amber)">Wat minder ging</div>
+        ${snap.watch.map(t => tipHtml(t, 'warn')).join('')}
+      </div>
+
+      <div class="adv-report-section" style="margin-top:12px">
+        <div class="adv-report-section-title">Wat beter kan — en hoe</div>
+        ${snap.improve.map(t => tipHtml(t, 'tip')).join('')}
+      </div>
+
+      ${m.list && m.list.length ? `
+      <div class="adv-report-missions" style="margin-top:16px">
         <div class="adv-report-section-title">Missies deze cyclus</div>
-        ${missions.map(m => `
-          <div class="adv-mission-row ${m.success ? 'win' : 'lose'}">
-            <span>${m.icon}</span>
-            <span class="adv-mission-name">${m.name}</span>
-            <span class="adv-mission-result">${m.success ? '✅' : '❌'} ${m.xpChange >= 0 ? '+' : ''}${m.xpChange} XP</span>
+        ${m.list.map(x => `
+          <div class="adv-mission-row ${x.success ? 'win' : 'lose'}">
+            <span>${x.icon || '🎯'}</span>
+            <span class="adv-mission-name">${x.name || ''}</span>
+            <span class="adv-mission-result">${x.success ? '✅' : '❌'} ${x.xpChange >= 0 ? '+' : ''}${x.xpChange} XP</span>
           </div>`).join('')}
         <div class="adv-report-summary">
-          ${won} volbracht · ${lost} mislukt · <strong style="color:${xpGained>=0?'var(--green)':'var(--red)'}">${xpGained >= 0 ? '+' : ''}${xpGained} XP</strong>
+          ${m.won} volbracht · ${m.lost} mislukt · <strong style="color:${m.xpGained >= 0 ? 'var(--green)' : 'var(--red)'}">${m.xpGained >= 0 ? '+' : ''}${m.xpGained} XP</strong>
         </div>
       </div>` : ''}
 
+      ${(lvl && city && path) ? `
       <div class="adv-report-status">
         <div class="adv-status-item">
           <div class="adv-status-icon">${lvl.icon}</div>
-          <div>
-            <div class="adv-status-val">Level ${lvl.level}</div>
-            <div class="adv-status-lbl">${lvl.title}</div>
-          </div>
+          <div><div class="adv-status-val">Level ${lvl.level}</div><div class="adv-status-lbl">${lvl.title}</div></div>
         </div>
         <div class="adv-status-item">
           <div class="adv-status-icon">${path.current.icon}</div>
-          <div>
-            <div class="adv-status-val">${path.current.name}</div>
-            <div class="adv-status-lbl">halte ${path.position + 1}/${path.total}</div>
-          </div>
+          <div><div class="adv-status-val">${path.current.name}</div><div class="adv-status-lbl">halte ${path.position + 1}/${path.total}</div></div>
         </div>
         <div class="adv-status-item">
           <div class="adv-status-icon">${city.stage.emoji}</div>
-          <div>
-            <div class="adv-status-val">${city.stage.name}</div>
-            <div class="adv-status-lbl">jouw stad</div>
-          </div>
+          <div><div class="adv-status-val">${city.stage.name}</div><div class="adv-status-lbl">jouw stad</div></div>
         </div>
-      </div>
+      </div>` : ''}
 
       <button class="btn-primary" onclick="this.closest('.adv-overlay').remove()">Naar de volgende cyclus</button>
     </div>`;
